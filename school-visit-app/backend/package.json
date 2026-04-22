@@ -1,0 +1,23 @@
+{
+  "name": "school-visit-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "cloudinary": "^2.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "googleapis": "^150.0.1",
+    "mongoose": "^9.1.0",
+    "multer": "^2.0.0",
+    "nodemailer": "^7.0.3",
+    "puppeteer": "^24.7.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
