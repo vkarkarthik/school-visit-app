@@ -6,8 +6,8 @@ export const env = {
   mongoUri: process.env.MONGODB_URI,
   frontendUrl: process.env.FRONTEND_URL,
   spreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID,
-  sheetsRange: process.env.GOOGLE_SHEETS_RANGE || "Telangana/AP!A:Z",
-  sheetsRanges: (process.env.GOOGLE_SHEETS_RANGES || process.env.GOOGLE_SHEETS_RANGE || "Telangana/AP!A:Z")
+  sheetsRange: process.env.GOOGLE_SHEETS_RANGE || "'Telangana/AP'!A:Z",
+  sheetsRanges: (process.env.GOOGLE_SHEETS_RANGES || process.env.GOOGLE_SHEETS_RANGE || "'Telangana/AP'!A:Z")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
