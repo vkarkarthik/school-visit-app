@@ -4,8 +4,10 @@ import { connectDb } from './config/db.js';
 
 async function start() {
   await connectDb();
-  app.listen(env.port, () => {
-    console.log(`Server running on port ${env.port}`);
+  const PORT = process.env.PORT || env.port || 5000;
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
   });
 }
 
