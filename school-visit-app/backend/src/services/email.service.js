@@ -15,29 +15,25 @@ export const transporter = nodemailer.createTransport({
 });
 
 export async function sendVisitReportEmail({ to, subject, html, pdfBuffer }) {
-  console.log("SMTP config:", {
-    host: env.smtp.host,
-    port: env.smtp.port,
-    user: env.smtp.user,
-    fromEmail: env.smtp.fromEmail,
+  const response = await fetch(process.env.GMAIL_SCRIPT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      to,
+      subject,
+      html,
+      pdfBase64: pdfBuffer ? Buffer.from(pdfBuffer).toString("base64") : null,
+      pdfFileName: "school-visit-report.pdf",
+    }),
   });
 
-  const attachments = pdfBuffer
-    ? [
-        {
-          filename: "school-visit-report.pdf",
-          content: pdfBuffer,
-          contentType: "application/pdf",
-        },
-      ]
-    : [];
+  const result = await response.json();
 
-  return transporter.sendMail({
-    from: `"${env.smtp.fromName}" <${env.smtp.fromEmail}>`,
-    to,
-    cc: env.smtp.cc || undefined,
-    subject,
-    html,
-    attachments,
-  });
+  if (!result.success) {
+    throw new Error(result.error || "Apps Script email sending failed");
+  }
+
+  return result;
 }
