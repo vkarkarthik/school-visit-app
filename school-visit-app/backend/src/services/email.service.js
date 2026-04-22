@@ -4,21 +4,24 @@ import { env } from "../config/env.js";
 export const transporter = nodemailer.createTransport({
   host: env.smtp.host,
   port: Number(env.smtp.port),
-  secure: false, // 587 = false
+  secure: Number(env.smtp.port) === 465,
   auth: {
     user: env.smtp.user,
     pass: env.smtp.pass,
   },
-  connectionTimeout: 30000,
-  greetingTimeout: 30000,
-  socketTimeout: 30000,
-  requireTLS: true,
-  tls: {
-    rejectUnauthorized: false,
-  },
+  connectionTimeout: 60000,
+  greetingTimeout: 60000,
+  socketTimeout: 60000,
 });
 
 export async function sendVisitReportEmail({ to, subject, html, pdfBuffer }) {
+  console.log("SMTP config:", {
+    host: env.smtp.host,
+    port: env.smtp.port,
+    user: env.smtp.user,
+    fromEmail: env.smtp.fromEmail,
+  });
+
   const attachments = pdfBuffer
     ? [
         {
