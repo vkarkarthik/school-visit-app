@@ -3,6 +3,7 @@
     {
       "source": "/api/:path*",
       "destination": "https://school-visit-app-production.up.railway.app/api/:path*"
+
     }
   ]
 }
