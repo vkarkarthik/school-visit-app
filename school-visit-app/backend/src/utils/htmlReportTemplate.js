@@ -11,13 +11,20 @@ export function buildReportHtml(data) {
     : `Session photos were not attached in this submission.`;
 
   return `
-  <div style="font-family: Arial, sans-serif; background:#f4f6f9; padding:24px; color:#222;">
-    <div style="max-width:720px; margin:0 auto; background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
-      
-      <div style="background:#1f6feb; color:#ffffff; padding:20px 24px;">
-        <h2 style="margin:0; font-size:22px;">School Visit Update</h2>
-        <p style="margin:8px 0 0; font-size:14px; opacity:0.95;">
-          ${escapeHtml(data.schoolName)} | ${escapeHtml(data.purposeOfVisit)} | ${escapeHtml(visitDateText)}
+  <div style="font-family: Arial, sans-serif; background:#edf7f3; padding:24px; color:#17202a;">
+    <div style="max-width:760px; margin:0 auto; background:#ffffff; border:1px solid #d7e7df; border-radius:14px; overflow:hidden;">
+      <div style="height:6px; background:#c9272d;"></div>
+
+      <div style="padding:20px 24px 14px; border-bottom:1px solid #d7e7df;">
+        <img src="cid:superteacherLogo" alt="SuperTeacher" style="display:block; width:230px; max-width:70%; height:auto; margin-bottom:14px;" />
+        <div style="display:inline-block; background:#e7f5ff; color:#12649b; border:1px solid #c7e9f8; border-radius:999px; padding:5px 10px; font-size:12px; font-weight:700;">
+          School Visit Update
+        </div>
+        <h2 style="margin:10px 0 0; font-size:24px; line-height:1.25; color:#173723;">
+          ${escapeHtml(data.schoolName)}
+        </h2>
+        <p style="margin:6px 0 0; font-size:14px; color:#5e7168;">
+          ${escapeHtml(data.purposeOfVisit)} &bull; ${escapeHtml(visitDateText)}
         </p>
       </div>
 
@@ -38,27 +45,34 @@ export function buildReportHtml(data) {
           ${content.body2(data)}
         </p>
 
-        <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px; padding:16px; margin:18px 0;">
-          <p style="margin:0 0 10px;"><strong>Visit Snapshot</strong></p>
-          <ul style="margin:0; padding-left:18px;">
-            <li><strong>School:</strong> ${escapeHtml(data.schoolName)}</li>
-            <li><strong>Location:</strong> ${escapeHtml(data.city || "")}, ${escapeHtml(data.state || "")}</li>
-            <li><strong>Program Manager:</strong> ${escapeHtml(data.programManagerName)}</li>
-            <li><strong>Purpose of Visit:</strong> ${escapeHtml(data.purposeOfVisit)}</li>
-            <li><strong>Date of Visit:</strong> ${escapeHtml(visitDateText)}</li>
-            <li><strong>Next Planned Follow-up:</strong> ${escapeHtml(nextVisitText)}</li>
-          </ul>
+        <div style="background:#f7fbf9; border:1px solid #d7e7df; border-radius:12px; padding:0; margin:20px 0; overflow:hidden;">
+          <div style="background:#ecf8ef; padding:11px 14px; border-bottom:1px solid #d7e7df;">
+            <strong style="color:#173723;">Visit Snapshot</strong>
+          </div>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%; border-collapse:collapse; font-size:13.5px;">
+            ${buildSnapshotRow("School", data.schoolName)}
+            ${buildSnapshotRow("School Type", data.isNewSchool ? "New / Prospect School" : "Existing School")}
+            ${buildSnapshotRow("Location", `${data.city || "-"}, ${data.state || "-"}`)}
+            ${buildSnapshotRow("Program Manager", data.programManagerName)}
+            ${buildSnapshotRow("Purpose of Visit", data.purposeOfVisit)}
+            ${buildSnapshotRow("Date of Visit", visitDateText)}
+            ${buildSnapshotRow("Next Planned Follow-up", nextVisitText)}
+          </table>
         </div>
 
-        <p>
-          <strong>Brief Session Summary:</strong><br>
-          ${nl2br(escapeHtml(data.sessionSummary))}
-        </p>
+        <div style="margin:18px 0;">
+          <div style="font-weight:700; color:#12649b; margin-bottom:6px;">Brief Session Summary</div>
+          <div style="background:#fffef9; border:1px solid #d7e7df; border-radius:10px; padding:12px 14px;">
+            ${nl2br(escapeHtml(data.sessionSummary))}
+          </div>
+        </div>
 
-        <p>
-          <strong>Immediate Follow-up / Next Steps:</strong><br>
-          ${nl2br(escapeHtml(data.actionItems || content.defaultActionText))}
-        </p>
+        <div style="margin:18px 0;">
+          <div style="font-weight:700; color:#2f8a38; margin-bottom:6px;">Immediate Follow-up / Next Steps</div>
+          <div style="background:#ecf8ef; border:1px solid #cfe9d6; border-radius:10px; padding:12px 14px;">
+            ${nl2br(escapeHtml(data.actionItems || content.defaultActionText))}
+          </div>
+        </div>
 
         <p>
           ${photosText}
@@ -75,16 +89,50 @@ export function buildReportHtml(data) {
         <p style="margin-bottom:0;">
           Regards,<br>
           <strong>${escapeHtml(data.programManagerName)}</strong><br>
-          <span style="color:#555;">Super Teachers</span>
+          <span style="color:#5e7168;">SuperTeacher</span>
         </p>
+      </div>
+
+      <div style="padding:12px 24px; background:#f7fbf9; border-top:1px solid #d7e7df; color:#5e7168; font-size:12px;">
+        This is a system-generated visit communication from SuperTeacher.
       </div>
     </div>
   </div>
   `;
 }
 
+function buildSnapshotRow(label, value) {
+  return `
+    <tr>
+      <td style="width:34%; padding:9px 14px; border-bottom:1px solid #e4eee9; color:#5e7168; font-weight:700;">${escapeHtml(label)}</td>
+      <td style="padding:9px 14px; border-bottom:1px solid #e4eee9; color:#17202a;">${escapeHtml(value || "-")}</td>
+    </tr>
+  `;
+}
+
 function getPurposeEmailContent(data) {
   const purpose = String(data.purposeOfVisit || "").trim().toLowerCase();
+
+  if (purpose === "new school visit / demo") {
+    return {
+      intro: (data) =>
+        `This is to share the update regarding the introductory discussion/demo conducted with <strong>${escapeHtml(
+          data.schoolName
+        )}</strong> on <strong>${escapeHtml(formatDate(data.visitDate))}</strong>.`,
+
+      body1: () =>
+        `The visit focused on understanding the school's requirements, current academic and operational priorities, and the possible fitment of SuperTeacher programs. The discussion/demo was intended to give the school team a clear view of the solution, implementation approach, expected outcomes, and support process.`,
+
+      body2: () =>
+        `The interaction also helped identify the next decision points, stakeholders to be aligned, and any information needed for the school to evaluate the program further. This visit has been recorded as a new/prospect school engagement for follow-up and internal tracking.`,
+
+      defaultActionText:
+        "Please review the discussed solution internally and share your requirements, questions, or preferred next meeting schedule.",
+
+      closing: () =>
+        `Thank you for your time and interest. We look forward to continuing the discussion and supporting your school with the next steps.`
+    };
+  }
 
   if (purpose === "teachers copy") {
     return {

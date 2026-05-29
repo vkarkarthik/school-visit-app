@@ -5,4 +5,5 @@ frontend/node_modules
 backend/.env
 frontend/.env
 backend/credentials/service-account.json
+backend/generated/
 dist

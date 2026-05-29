@@ -1,3 +1,13 @@
+import { existsSync, readFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+
+const utilsDir = dirname(fileURLToPath(import.meta.url));
+const logoPath = join(utilsDir, "../../assets/superteacher-logo.png");
+const logoDataUrl = existsSync(logoPath)
+  ? `data:image/png;base64,${readFileSync(logoPath).toString("base64")}`
+  : "";
+
 export function buildPdfReportHtml(data) {
   const visitDateText = formatDate(data.visitDate);
   const nextVisitText = data.nextVisitDate
@@ -47,8 +57,8 @@ export function buildPdfReportHtml(data) {
         }
 
         .header {
-          border-bottom: 3px solid #1f6feb;
-          padding-bottom: 12px;
+          border-bottom: 4px solid #c9272d;
+          padding-bottom: 14px;
           margin-bottom: 18px;
         }
 
@@ -68,17 +78,24 @@ export function buildPdfReportHtml(data) {
           width: 220px;
         }
 
+        .logo {
+          width: 210px;
+          height: auto;
+          display: block;
+          margin-bottom: 12px;
+        }
+
         .org-name {
-          font-size: 14px;
+          font-size: 12px;
           font-weight: 700;
-          color: #1f6feb;
-          letter-spacing: 0.2px;
+          color: #2f8a38;
+          text-transform: uppercase;
         }
 
         .report-title {
           font-size: 24px;
           font-weight: 700;
-          color: #111827;
+          color: #173723;
           margin-top: 6px;
         }
 
@@ -90,7 +107,7 @@ export function buildPdfReportHtml(data) {
 
         .meta-box {
           border: 1px solid #dbe4f0;
-          background: #f8fbff;
+          background: #f7fbf9;
           border-radius: 8px;
           padding: 10px 12px;
           font-size: 11.5px;
@@ -111,21 +128,21 @@ export function buildPdfReportHtml(data) {
         .section-title {
           font-size: 14px;
           font-weight: 700;
-          color: #1f6feb;
+          color: #12649b;
           margin-bottom: 8px;
           padding-bottom: 4px;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid #d7e7df;
         }
 
         table.info-table {
           width: 100%;
           border-collapse: collapse;
-          border: 1px solid #d1d5db;
+          border: 1px solid #d7e7df;
           font-size: 12.5px;
         }
 
         .info-table td {
-          border: 1px solid #d1d5db;
+          border: 1px solid #d7e7df;
           padding: 8px 10px;
           vertical-align: top;
         }
@@ -133,21 +150,21 @@ export function buildPdfReportHtml(data) {
         .label-cell {
           width: 28%;
           font-weight: 700;
-          background: #f9fafb;
-          color: #111827;
+          background: #ecf8ef;
+          color: #173723;
         }
 
         .content-box {
-          border: 1px solid #d1d5db;
-          background: #fbfcfe;
+          border: 1px solid #d7e7df;
+          background: #fffef9;
           border-radius: 8px;
           padding: 12px 14px;
           white-space: pre-wrap;
         }
 
         .summary-box {
-          background: #f8fbff;
-          border-color: #dbe4f0;
+          background: #e7f5ff;
+          border-color: #c7e9f8;
         }
 
         .muted {
@@ -159,7 +176,7 @@ export function buildPdfReportHtml(data) {
         }
 
         .photo-card {
-          border: 1px solid #d1d5db;
+          border: 1px solid #d7e7df;
           border-radius: 10px;
           padding: 12px;
           margin-bottom: 16px;
@@ -170,14 +187,14 @@ export function buildPdfReportHtml(data) {
         .photo-label {
           font-size: 12px;
           font-weight: 700;
-          color: #1f6feb;
+          color: #12649b;
           margin-bottom: 8px;
         }
 
         .photo-frame {
-          border: 1px solid #e5e7eb;
+          border: 1px solid #d7e7df;
           border-radius: 8px;
-          background: #f9fafb;
+          background: #f7fbf9;
           text-align: center;
           padding: 10px;
         }
@@ -210,7 +227,7 @@ export function buildPdfReportHtml(data) {
         .footer {
           margin-top: 28px;
           padding-top: 10px;
-          border-top: 1px solid #e5e7eb;
+          border-top: 1px solid #d7e7df;
           font-size: 11px;
           color: #6b7280;
         }
@@ -243,7 +260,8 @@ export function buildPdfReportHtml(data) {
         <div class="header">
           <div class="header-top">
             <div class="header-left">
-              <div class="org-name">Super Teachers</div>
+              ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" alt="SuperTeacher" />` : `<div class="org-name">SuperTeacher</div>`}
+              <div class="org-name">Creating Creators</div>
               <div class="report-title">School Visit Report</div>
               <div class="report-subtitle">
                 ${escapeHtml(data.schoolName)} | ${escapeHtml(data.purposeOfVisit)} | ${escapeHtml(visitDateText)}
@@ -265,6 +283,10 @@ export function buildPdfReportHtml(data) {
             <tr>
               <td class="label-cell">School Name</td>
               <td>${escapeHtml(data.schoolName)}</td>
+            </tr>
+            <tr>
+              <td class="label-cell">School Type</td>
+              <td>${data.isNewSchool ? "New / Prospect School" : "Existing School"}</td>
             </tr>
             <tr>
               <td class="label-cell">State</td>
@@ -331,7 +353,7 @@ export function buildPdfReportHtml(data) {
         <div class="footer">
           <div class="footer-row">
             <div class="footer-left">
-              Generated by Super Teachers
+              Generated by SuperTeacher
             </div>
             <div class="footer-right">
               Prepared by ${escapeHtml(data.programManagerName || "-")}
