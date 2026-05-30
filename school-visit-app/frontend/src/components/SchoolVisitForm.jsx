@@ -10,42 +10,74 @@ const PURPOSES = [
   'Admin Related Work'
 ];
 
-const VISIT_TEMPLATES = {
+const PURPOSE_GUIDES = {
   'New School Visit / Demo': {
-    sessionSummary:
-      'Initial visit/demo discussion was conducted with the school team.\n\nDiscussion covered:\n- School requirement / problem statement: ...\n- Grades or departments discussed: ...\n- Product/program shown: ...\n- Demo focus areas: ...\n- Key questions raised by school: ...\n- Decision makers / participants present: ...\n- School interest level and observations: ...',
-    actionItems:
-      'Next steps:\n- SuperTeacher team to share: ...\n- School team to review/confirm: ...\n- Follow-up owner: ...\n- Expected closure / next meeting date: ...'
+    fields: [
+      ['requirement', 'Requirement discussed', 'STEM program for middle school, coding lab setup, etc.'],
+      ['demoShown', 'Demo / product shown', 'OpenCode, Robotics, LMS, LMMS, etc.'],
+      ['grades', 'Grades / classes', 'Grade 3 to 8'],
+      ['peopleMet', 'Decision makers met', 'Principal, academic coordinator, management team'],
+      ['interestLevel', 'Interest level', 'Interested / evaluating / needs follow-up'],
+      ['questions', 'Questions or objections', 'Pricing, timetable, teacher readiness, lab setup'],
+      ['nextStep', 'Next step', 'Share proposal, schedule second demo, collect requirements']
+    ]
   },
   'Teachers Copy': {
-    sessionSummary:
-      'Teacher copies/materials were handed over and discussed with the school team.\n\nDetails covered:\n- Materials handed over: ...\n- Quantity / classes covered: ...\n- Recipient name and designation: ...\n- Usage instructions explained: ...\n- Pending material requirement, if any: ...\n- School confirmation / acknowledgement: ...',
-    actionItems:
-      'Follow-up points:\n- School to verify material count and allocation.\n- Program manager to close pending material/support requirement: ...\n- Next confirmation date: ...'
+    fields: [
+      ['materials', 'Materials handed over', 'Teacher copy, lesson plan book, kits, worksheets'],
+      ['quantity', 'Quantity / count', '12 teacher copies'],
+      ['grades', 'Classes / grades covered', 'Grade 1 to 5'],
+      ['receivedBy', 'Received by', 'Name and designation'],
+      ['usage', 'Usage explained', 'How teachers should use the material in class'],
+      ['pending', 'Pending material, if any', 'None / extra copies / missing kits'],
+      ['nextStep', 'Next step', 'Confirm allocation, send pending materials, collect acknowledgement']
+    ]
   },
   'Induction Training': {
-    sessionSummary:
-      'Induction/orientation session was conducted for the school team.\n\nOrientation covered:\n- Program/module introduced: ...\n- Platform/tool covered, if any (LMS/LMMS/app/portal): ...\n- Grades/classes included: ...\n- Participants attended: ...\n- Implementation workflow explained: ...\n- Login/access/process explained: ...\n- Key questions clarified: ...\n- Readiness/concerns observed: ...',
-    actionItems:
-      'Next steps:\n- School team to complete internal alignment/access setup: ...\n- SuperTeacher team to provide pending support/materials: ...\n- Follow-up required on: ...\n- Target date for next check-in: ...'
+    fields: [
+      ['program', 'Program / module introduced', 'OpenCode 3.0, Robotics, STEM, LMS onboarding'],
+      ['platform', 'Platform covered', 'LMS, LMMS, app, portal, dashboard'],
+      ['grades', 'Grades / classes', 'Grade 1 to 8'],
+      ['participants', 'Participants', 'Principal, coordinator, teachers, admin team'],
+      ['workflow', 'Workflow explained', 'Login, class setup, lesson flow, reporting, support process'],
+      ['questions', 'Questions clarified', 'Access, timetable, usage expectations, support'],
+      ['readiness', 'Readiness / status', 'Ready to start / access pending / internal alignment needed'],
+      ['nextStep', 'Next step', 'Complete login setup, schedule teacher training, share resources']
+    ]
   },
   'Teachers Training': {
-    sessionSummary:
-      'Teacher training session was conducted for the school team.\n\nTraining details:\n- Topic/module covered: ...\n- Platform/tool covered (LMS/LMMS/app/resources): ...\n- Grades/subjects included: ...\n- Number of teachers attended: ...\n- Activities/demo conducted: ...\n- Classroom usage process explained: ...\n- Teacher practice or hands-on activity completed: ...\n- Questions/challenges raised: ...\n- Overall participation/response: ...',
-    actionItems:
-      'Follow-up points:\n- Teachers to practice/review: ...\n- School coordinator to ensure: ...\n- Program manager to share/support: ...\n- Additional training required: Yes/No - details: ...\n- Next review date: ...'
+    fields: [
+      ['topic', 'Topic covered', 'LMS usage, lesson planning, classroom activities'],
+      ['grades', 'Grades / subjects', 'Grade 3 to 5, Computer Science'],
+      ['attendees', 'Teachers attended', '12 teachers'],
+      ['handsOn', 'Hands-on activity', 'Lesson creation, activity planning, dashboard practice'],
+      ['questions', 'Questions / issues raised', 'Login issue, lesson tracking, classroom flow'],
+      ['outcome', 'Training outcome', 'Teachers understood workflow and are ready to use'],
+      ['nextStep', 'Next step', 'Follow-up support after one week, collect usage feedback']
+    ]
   },
   'Robotics Training': {
-    sessionSummary:
-      'Robotics training/session was conducted with guided practical engagement.\n\nSession details:\n- Concept/topic covered: ...\n- Kit/components used: ...\n- Grades/students/teachers included: ...\n- Activity/project completed: ...\n- Hands-on participation level: ...\n- Technical issues or material gaps: ...\n- Learning outcomes observed: ...',
-    actionItems:
-      'Next steps:\n- School to continue practice/activity: ...\n- SuperTeacher team to provide support/materials: ...\n- Next robotics topic/session planned: ...\n- Follow-up date: ...'
+    fields: [
+      ['concept', 'Concept / topic', 'Sensors, motors, circuits, robot movement'],
+      ['kit', 'Kit / components used', 'Robotics kit, motor, sensor, controller'],
+      ['grades', 'Grades / participants', 'Grade 6 to 8 students / teachers'],
+      ['activity', 'Activity completed', 'Built line follower, tested motor movement'],
+      ['participation', 'Participation level', 'Active participation, group activity completed'],
+      ['issues', 'Issues / material gaps', 'None / missing component / charging issue'],
+      ['outcome', 'Learning outcome', 'Students understood basic robot movement'],
+      ['nextStep', 'Next step', 'Next robotics session, replacement material, practice activity']
+    ]
   },
   'Admin Related Work': {
-    sessionSummary:
-      'Administrative coordination was completed/reviewed during the school visit.\n\nItems discussed/completed:\n- Documentation/process reviewed: ...\n- Pending approvals/forms/payments/materials: ...\n- People met: ...\n- Current status: ...\n- Blockers/dependencies: ...\n- School commitment/confirmation: ...',
-    actionItems:
-      'Closure plan:\n- Pending item: ... | Owner: ... | Due date: ...\n- Pending item: ... | Owner: ... | Due date: ...\n- Program manager follow-up date: ...'
+    fields: [
+      ['workDone', 'Work completed / reviewed', 'Documentation, payment follow-up, approval, material check'],
+      ['peopleMet', 'People met', 'Admin officer, coordinator, accounts team'],
+      ['status', 'Current status', 'Completed / pending with school / pending with SuperTeacher'],
+      ['pending', 'Pending item', 'PO, payment, approval, material receipt'],
+      ['blocker', 'Blocker / dependency', 'Management approval, document pending, payment timeline'],
+      ['owner', 'Owner', 'School admin / program manager / accounts team'],
+      ['nextStep', 'Next step', 'Close pending item, share document, follow up by date']
+    ]
   }
 };
 
@@ -66,6 +98,8 @@ const emptyForm = (currentUser = {}) => ({
   visitDate: '',
   sessionSummary: '',
   actionItems: '',
+  guidedDetails: {},
+  manualReportText: 'false',
   nextVisitDate: '',
   remarks: ''
 });
@@ -98,6 +132,14 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
   const hasSchoolMaster = states.length > 0 && schools.length > 0;
   const isNewSchool = form.isNewSchool === 'true';
+  const purposeGuide = PURPOSE_GUIDES[form.purposeOfVisit];
+  const generatedCopy = useMemo(
+    () => generateVisitCopy(form.purposeOfVisit, form.guidedDetails || {}, form),
+    [form.purposeOfVisit, form.guidedDetails, form.schoolName, form.course, form.nextVisitDate]
+  );
+  const useManualReportText = form.manualReportText === 'true';
+  const effectiveSessionSummary = useManualReportText ? form.sessionSummary : generatedCopy.sessionSummary;
+  const effectiveActionItems = useManualReportText ? form.actionItems : generatedCopy.actionItems;
 
   useEffect(() => {
     localStorage.setItem('schoolVisitDraft', JSON.stringify(form));
@@ -148,8 +190,6 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
     const { name, value } = event.target;
 
     if (name === 'isNewSchool') {
-      const template = value === 'true' ? VISIT_TEMPLATES['New School Visit / Demo'] : null;
-
       setForm((prev) => ({
         ...prev,
         isNewSchool: value,
@@ -162,8 +202,10 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
         schoolEmail: '',
         course: value === 'true' ? prev.course : '',
         purposeOfVisit: value === 'true' ? 'New School Visit / Demo' : prev.purposeOfVisit,
-        sessionSummary: value === 'true' && !prev.sessionSummary ? template.sessionSummary : prev.sessionSummary,
-        actionItems: value === 'true' && !prev.actionItems ? template.actionItems : prev.actionItems
+        guidedDetails: value === 'true' ? {} : prev.guidedDetails || {},
+        sessionSummary: value === 'true' ? '' : prev.sessionSummary,
+        actionItems: value === 'true' ? '' : prev.actionItems,
+        manualReportText: 'false'
       }));
       return;
     }
@@ -189,13 +231,13 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
     }
 
     if (name === 'purposeOfVisit') {
-      const template = VISIT_TEMPLATES[value];
-
       setForm((prev) => ({
         ...prev,
         purposeOfVisit: value,
-        sessionSummary: prev.sessionSummary || template?.sessionSummary || '',
-        actionItems: prev.actionItems || template?.actionItems || ''
+        guidedDetails: {},
+        sessionSummary: '',
+        actionItems: '',
+        manualReportText: 'false'
       }));
       return;
     }
@@ -203,14 +245,13 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const applyVisitTemplate = () => {
-    const template = VISIT_TEMPLATES[form.purposeOfVisit];
-    if (!template) return;
-
+  const handleGuidedDetailChange = (key, value) => {
     setForm((prev) => ({
       ...prev,
-      sessionSummary: template.sessionSummary,
-      actionItems: template.actionItems
+      guidedDetails: {
+        ...(prev.guidedDetails || {}),
+        [key]: value
+      }
     }));
   };
 
@@ -238,11 +279,20 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
     }
     if (!form.purposeOfVisit) nextErrors.purposeOfVisit = 'Purpose is required.';
     if (!form.visitDate) nextErrors.visitDate = 'Visit date is required.';
-    if (!form.sessionSummary.trim()) nextErrors.sessionSummary = 'Session summary is required.';
-    if (form.sessionSummary.includes('...')) {
+
+    if (!useManualReportText && purposeGuide) {
+      purposeGuide.fields.forEach(([key, label], index) => {
+        if (index < 5 && !String(form.guidedDetails?.[key] || '').trim()) {
+          nextErrors[`guided_${key}`] = `${label} is required.`;
+        }
+      });
+    }
+
+    if (useManualReportText && !form.sessionSummary.trim()) nextErrors.sessionSummary = 'Session summary is required.';
+    if (useManualReportText && form.sessionSummary.includes('...')) {
       nextErrors.sessionSummary = 'Replace all ... placeholders with actual visit details.';
     }
-    if (form.actionItems.includes('...')) {
+    if (useManualReportText && form.actionItems.includes('...')) {
       nextErrors.actionItems = 'Replace all ... placeholders with actual follow-up details.';
     }
 
@@ -274,7 +324,14 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
 
     try {
       const data = new FormData();
-      Object.entries(form).forEach(([key, value]) => data.append(key, value));
+      Object.entries({
+        ...form,
+        sessionSummary: effectiveSessionSummary,
+        actionItems: effectiveActionItems
+      }).forEach(([key, value]) => {
+        if (key === 'guidedDetails' || key === 'manualReportText') return;
+        data.append(key, value);
+      });
       const compressedPhotos = await Promise.all(photos.map(compressImage));
       compressedPhotos.forEach((file) => data.append('photos', file));
 
@@ -331,7 +388,11 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
 
     setPdfPreviewing(true);
     try {
-      const response = await api.post('/reports/preview-pdf', form, { responseType: 'blob' });
+      const response = await api.post(
+        '/reports/preview-pdf',
+        { ...form, sessionSummary: effectiveSessionSummary, actionItems: effectiveActionItems },
+        { responseType: 'blob' }
+      );
       const url = URL.createObjectURL(response.data);
       window.open(url, '_blank', 'noopener,noreferrer');
       setTimeout(() => URL.revokeObjectURL(url), 30000);
@@ -554,37 +615,80 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
               {renderError('visitDate')}
             </label>
 
-            <div className="full-width template-toolbar">
-              <span>Standard text is editable after selection.</span>
-              <button type="button" onClick={applyVisitTemplate} disabled={!form.purposeOfVisit}>
-                Use standard format
-              </button>
-            </div>
+            {purposeGuide && (
+              <div className="full-width guided-builder">
+                <div className="template-toolbar">
+                  <span>Fill quick points. The app will create the detailed report automatically.</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        manualReportText: prev.manualReportText === 'true' ? 'false' : 'true',
+                        sessionSummary: prev.sessionSummary || generatedCopy.sessionSummary,
+                        actionItems: prev.actionItems || generatedCopy.actionItems
+                      }))
+                    }
+                  >
+                    {useManualReportText ? 'Use auto report' : 'Edit generated text'}
+                  </button>
+                </div>
 
-            <label className="full-width">
-              Session Summary
-              <textarea
-                name="sessionSummary"
-                value={form.sessionSummary}
-                onChange={handleChange}
-                placeholder="Briefly capture what was completed, who attended, and key discussion points."
-                rows="5"
-                required
-              />
-              {renderError('sessionSummary')}
-            </label>
+                {!useManualReportText && (
+                  <>
+                    <div className="form-grid">
+                      {purposeGuide.fields.map(([key, label, placeholder], index) => (
+                        <label key={key} className={index > 4 ? '' : ''}>
+                          {label}
+                          <input
+                            value={form.guidedDetails?.[key] || ''}
+                            onChange={(event) => handleGuidedDetailChange(key, event.target.value)}
+                            placeholder={placeholder}
+                          />
+                          {renderError(`guided_${key}`)}
+                        </label>
+                      ))}
+                    </div>
 
-            <label className="full-width">
-              Action Items / Follow-up
-              <textarea
-                name="actionItems"
-                value={form.actionItems}
-                onChange={handleChange}
-                placeholder="List next steps, owner, and expected follow-up."
-                rows="4"
-              />
-              {renderError('actionItems')}
-            </label>
+                    <div className="preview-copy full-width">
+                      <h3>Auto-generated session summary</h3>
+                      <p>{generatedCopy.sessionSummary || 'Fill the quick points above to generate the session summary.'}</p>
+                      <h3>Auto-generated follow-up</h3>
+                      <p>{generatedCopy.actionItems || 'Fill the quick points above to generate follow-up points.'}</p>
+                    </div>
+                  </>
+                )}
+
+                {useManualReportText && (
+                  <div className="form-grid">
+                    <label className="full-width">
+                      Session Summary
+                      <textarea
+                        name="sessionSummary"
+                        value={form.sessionSummary}
+                        onChange={handleChange}
+                        placeholder="Briefly capture what was completed, who attended, and key discussion points."
+                        rows="5"
+                        required
+                      />
+                      {renderError('sessionSummary')}
+                    </label>
+
+                    <label className="full-width">
+                      Action Items / Follow-up
+                      <textarea
+                        name="actionItems"
+                        value={form.actionItems}
+                        onChange={handleChange}
+                        placeholder="List next steps, owner, and expected follow-up."
+                        rows="4"
+                      />
+                      {renderError('actionItems')}
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
 
             <label>
               Next Visit Date
@@ -700,9 +804,9 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
             </div>
             <div className="preview-copy">
               <h3>Session Summary</h3>
-              <p>{form.sessionSummary}</p>
+              <p>{effectiveSessionSummary}</p>
               <h3>Action Items</h3>
-              <p>{form.actionItems || 'No action items added.'}</p>
+              <p>{effectiveActionItems || 'No action items added.'}</p>
             </div>
             <div className="modal-actions">
               <button type="button" className="ghost-button" onClick={() => setPreviewOpen(false)}>
@@ -736,6 +840,60 @@ function getEmailWarning(email) {
   }
   if (!value.includes('.')) return 'Email domain looks incomplete.';
   return '';
+}
+
+function generateVisitCopy(purpose, details = {}, form = {}) {
+  const value = (key, fallback = '') => String(details[key] || fallback || '').trim();
+  const school = form.schoolName || 'the school';
+  const course = form.course ? ` for ${form.course}` : '';
+  const nextStep = value('nextStep', 'Follow-up will be planned based on school requirements.');
+
+  if (purpose === 'New School Visit / Demo') {
+    return {
+      sessionSummary: `A new school visit/demo discussion was conducted with ${school}. The discussion focused on ${value('requirement', 'the school requirement')}${course}. The team presented ${value('demoShown', 'the relevant SuperTeacher solution')} for ${value('grades', 'the applicable grades/classes')}. The interaction included ${value('peopleMet', 'the relevant school stakeholders')}, and the school's current interest/status was recorded as ${value('interestLevel', 'to be followed up')}. Key questions or concerns discussed were: ${value('questions', 'none specifically recorded')}.`,
+      actionItems: `Next step: ${nextStep}. Program/sales team will continue follow-up with the school and share any required proposal, demo details, or supporting material.`
+    };
+  }
+
+  if (purpose === 'Teachers Copy') {
+    return {
+      sessionSummary: `Teacher copy/material handover was completed at ${school}. The materials handed over were ${value('materials', 'teacher copies/materials')}, covering ${value('grades', 'the applicable classes/grades')}. Quantity/count recorded: ${value('quantity', 'as per requirement')}. The materials were received by ${value('receivedBy', 'the school representative')}. Usage expectations were explained as: ${value('usage', 'materials to be used for classroom implementation')}. Pending material or coordination requirement: ${value('pending', 'none recorded')}.`,
+      actionItems: `Next step: ${nextStep}. The school team may verify allocation of the materials internally, and the program manager will close any pending material or support requirement.`
+    };
+  }
+
+  if (purpose === 'Induction Training') {
+    return {
+      sessionSummary: `An induction/orientation session was conducted at ${school}. The session introduced ${value('program', 'the selected program/module')}${course} and covered ${value('platform', 'the relevant platform/tools')} for ${value('grades', 'the applicable grades/classes')}. Participants included ${value('participants', 'the school team')}. The workflow explained during the session included ${value('workflow', 'login, usage process, classroom implementation, reporting, and support flow')}. Questions clarified during the session included: ${value('questions', 'none specifically recorded')}. Current readiness/status: ${value('readiness', 'to be followed up')}.`,
+      actionItems: `Next step: ${nextStep}. The school team will align internally on access and usage readiness, while the program manager will support pending setup, resources, or training requirements.`
+    };
+  }
+
+  if (purpose === 'Teachers Training') {
+    return {
+      sessionSummary: `A teacher training session was conducted at ${school}. The training covered ${value('topic', 'the planned topic/module')} for ${value('grades', 'the applicable grades/subjects')}. ${value('attendees', 'Teachers')} participated in the session. The hands-on component included ${value('handsOn', 'guided practice and classroom usage demonstration')}. Questions or issues raised during the session were: ${value('questions', 'none specifically recorded')}. Training outcome: ${value('outcome', 'teachers understood the workflow and are ready for classroom usage')}.`,
+      actionItems: `Next step: ${nextStep}. Teachers may continue practice/review of the covered workflow, and the program manager will collect any follow-up questions or support needs.`
+    };
+  }
+
+  if (purpose === 'Robotics Training') {
+    return {
+      sessionSummary: `A robotics training/session was conducted at ${school}. The session covered ${value('concept', 'the planned robotics concept')} using ${value('kit', 'the relevant robotics kit/components')} with ${value('grades', 'the applicable participants')}. The activity completed was ${value('activity', 'guided robotics practice')}. Participation level observed: ${value('participation', 'active participation')}. Issues or material gaps noted: ${value('issues', 'none recorded')}. Learning outcome: ${value('outcome', 'participants understood the concept covered during the session')}.`,
+      actionItems: `Next step: ${nextStep}. The school team may continue practice on the activity, and SuperTeacher will support any kit, material, or next-session requirement.`
+    };
+  }
+
+  if (purpose === 'Admin Related Work') {
+    return {
+      sessionSummary: `Administrative coordination was completed/reviewed at ${school}. Work completed or reviewed: ${value('workDone', 'administrative coordination')}. People met: ${value('peopleMet', 'the concerned school team')}. Current status: ${value('status', 'to be followed up')}. Pending item, if any: ${value('pending', 'none recorded')}. Blocker/dependency: ${value('blocker', 'none recorded')}. Owner for closure: ${value('owner', 'program manager/school team as applicable')}.`,
+      actionItems: `Next step: ${nextStep}. The owner will work towards closure of the pending item and the program manager will track completion.`
+    };
+  }
+
+  return {
+    sessionSummary: '',
+    actionItems: ''
+  };
 }
 
 async function compressImage(file) {
