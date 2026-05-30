@@ -7,18 +7,58 @@ import { env } from "../config/env.js";
 const serviceDir = dirname(fileURLToPath(import.meta.url));
 const logoPath = join(serviceDir, "../../assets/superteacher-logo.png");
 
-export const transporter = nodemailer.createTransport({
-  host: env.smtp.host,
-  port: Number(env.smtp.port),
-  secure: Number(env.smtp.port) === 465,
-  auth: {
-    user: env.smtp.user,
-    pass: env.smtp.pass,
-  },
-  connectionTimeout: 60000,
-  greetingTimeout: 60000,
-  socketTimeout: 60000,
-});
+function createTransporter(port = env.smtp.port) {
+  return nodemailer.createTransport({
+    host: env.smtp.host,
+    port: Number(port),
+    secure: Number(port) === 465,
+    requireTLS: Number(port) === 587,
+    auth: {
+      user: env.smtp.user,
+      pass: env.smtp.pass,
+    },
+    tls: {
+      servername: env.smtp.host,
+    },
+    connectionTimeout: 90000,
+    greetingTimeout: 90000,
+    socketTimeout: 90000,
+  });
+}
+
+function isConnectionError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    error?.code === "ETIMEDOUT" ||
+    error?.code === "ESOCKET" ||
+    error?.code === "ECONNECTION" ||
+    message.includes("timeout") ||
+    message.includes("connection")
+  );
+}
+
+async function sendMailWithFallback(mailOptions) {
+  const primaryPort = Number(env.smtp.port || 587);
+  const attemptedPorts = [primaryPort];
+
+  if (String(env.smtp.host || "").includes("gmail.com")) {
+    attemptedPorts.push(primaryPort === 465 ? 587 : 465);
+  }
+
+  let lastError;
+  for (const port of [...new Set(attemptedPorts)]) {
+    try {
+      return await createTransporter(port).sendMail(mailOptions);
+    } catch (error) {
+      lastError = error;
+      if (!isConnectionError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+}
 
 function mergeEmailLists(...values) {
   const seen = new Set();
@@ -93,7 +133,7 @@ export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdf
     });
   }
 
-  return transporter.sendMail({
+  return sendMailWithFallback({
     from: {
       name: env.smtp.fromName || "School Visit Reports",
       address: env.smtp.fromEmail || env.smtp.user,
