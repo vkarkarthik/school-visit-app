@@ -13,39 +13,39 @@ const PURPOSES = [
 const VISIT_TEMPLATES = {
   'New School Visit / Demo': {
     sessionSummary:
-      'Initial visit/demo discussion was conducted with the school team. The school requirements, current academic/operational context, program fit, and possible implementation approach were discussed.',
+      'Initial visit/demo discussion was conducted with the school team.\n\nDiscussion covered:\n- School requirement / problem statement: ...\n- Grades or departments discussed: ...\n- Product/program shown: ...\n- Demo focus areas: ...\n- Key questions raised by school: ...\n- Decision makers / participants present: ...\n- School interest level and observations: ...',
     actionItems:
-      'Sales/program team to share the next proposal or required details. School team to review the discussed solution internally and confirm interest, requirements, and next meeting availability.'
+      'Next steps:\n- SuperTeacher team to share: ...\n- School team to review/confirm: ...\n- Follow-up owner: ...\n- Expected closure / next meeting date: ...'
   },
   'Teachers Copy': {
     sessionSummary:
-      'Teacher copies/materials were handed over and discussed with the school team. Required coordination points, usage expectations, and pending material requirements were reviewed during the visit.',
+      'Teacher copies/materials were handed over and discussed with the school team.\n\nDetails covered:\n- Materials handed over: ...\n- Quantity / classes covered: ...\n- Recipient name and designation: ...\n- Usage instructions explained: ...\n- Pending material requirement, if any: ...\n- School confirmation / acknowledgement: ...',
     actionItems:
-      'School team to review the materials shared and confirm any pending requirements. Program manager to support closure of any open material or coordination points.'
+      'Follow-up points:\n- School to verify material count and allocation.\n- Program manager to close pending material/support requirement: ...\n- Next confirmation date: ...'
   },
   'Induction Training': {
     sessionSummary:
-      'Induction/orientation session was conducted for the school team. The program structure, implementation approach, classroom usage expectations, and support process were explained.',
+      'Induction/orientation session was conducted for the school team.\n\nOrientation covered:\n- Program/module introduced: ...\n- Platform/tool covered, if any (LMS/LMMS/app/portal): ...\n- Grades/classes included: ...\n- Participants attended: ...\n- Implementation workflow explained: ...\n- Login/access/process explained: ...\n- Key questions clarified: ...\n- Readiness/concerns observed: ...',
     actionItems:
-      'School team to align internally on the discussed implementation points. Program manager to follow up on readiness, pending queries, and next phase support requirements.'
+      'Next steps:\n- School team to complete internal alignment/access setup: ...\n- SuperTeacher team to provide pending support/materials: ...\n- Follow-up required on: ...\n- Target date for next check-in: ...'
   },
   'Teachers Training': {
     sessionSummary:
-      'Teacher training session was conducted with focus on program resources, classroom usage, activity flow, and practical implementation approach. Teacher queries were addressed during the session.',
+      'Teacher training session was conducted for the school team.\n\nTraining details:\n- Topic/module covered: ...\n- Platform/tool covered (LMS/LMMS/app/resources): ...\n- Grades/subjects included: ...\n- Number of teachers attended: ...\n- Activities/demo conducted: ...\n- Classroom usage process explained: ...\n- Teacher practice or hands-on activity completed: ...\n- Questions/challenges raised: ...\n- Overall participation/response: ...',
     actionItems:
-      'Teachers to continue internal practice/review of the covered tools and methods. Program manager to collect follow-up questions and plan any required support session.'
+      'Follow-up points:\n- Teachers to practice/review: ...\n- School coordinator to ensure: ...\n- Program manager to share/support: ...\n- Additional training required: Yes/No - details: ...\n- Next review date: ...'
   },
   'Robotics Training': {
     sessionSummary:
-      'Robotics training/session was conducted with guided activities and concept-based engagement. Participation, readiness, and support requirements were observed during the visit.',
+      'Robotics training/session was conducted with guided practical engagement.\n\nSession details:\n- Concept/topic covered: ...\n- Kit/components used: ...\n- Grades/students/teachers included: ...\n- Activity/project completed: ...\n- Hands-on participation level: ...\n- Technical issues or material gaps: ...\n- Learning outcomes observed: ...',
     actionItems:
-      'School team to continue encouraging student/teacher participation. Program manager to identify support needs and plan the next robotics-focused engagement.'
+      'Next steps:\n- School to continue practice/activity: ...\n- SuperTeacher team to provide support/materials: ...\n- Next robotics topic/session planned: ...\n- Follow-up date: ...'
   },
   'Admin Related Work': {
     sessionSummary:
-      'Administrative coordination was completed/reviewed during the school visit. Pending process items, documentation, and operational requirements were discussed with the school team.',
+      'Administrative coordination was completed/reviewed during the school visit.\n\nItems discussed/completed:\n- Documentation/process reviewed: ...\n- Pending approvals/forms/payments/materials: ...\n- People met: ...\n- Current status: ...\n- Blockers/dependencies: ...\n- School commitment/confirmation: ...',
     actionItems:
-      'School team to support closure of pending administrative items. Program manager to follow up on documentation, approvals, or process requirements wherever applicable.'
+      'Closure plan:\n- Pending item: ... | Owner: ... | Due date: ...\n- Pending item: ... | Owner: ... | Due date: ...\n- Program manager follow-up date: ...'
   }
 };
 

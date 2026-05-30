@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { env } from "../config/env.js";
@@ -95,6 +95,7 @@ async function parseAppsScriptResponse(response) {
 
 export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdfBuffer }) {
   const ccList = mergeEmailLists(env.smtp.cc, cc);
+  const logoBase64 = existsSync(logoPath) ? readFileSync(logoPath).toString("base64") : "";
 
   if (env.gmailScriptUrl) {
     let gmailScriptUrl;
@@ -117,6 +118,9 @@ export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdf
         html,
         pdfBase64: pdfBuffer ? Buffer.from(pdfBuffer).toString("base64") : null,
         pdfFileName: "school-visit-report.pdf",
+        logoBase64,
+        logoContentType: "image/png",
+        logoContentId: "superteacherLogo",
       }),
     });
 
