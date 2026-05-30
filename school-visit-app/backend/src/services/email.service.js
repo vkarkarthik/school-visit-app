@@ -39,7 +39,14 @@ export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdf
   const ccList = mergeEmailLists(env.smtp.cc, cc);
 
   if (env.gmailScriptUrl) {
-    const response = await fetch(env.gmailScriptUrl, {
+    let gmailScriptUrl;
+    try {
+      gmailScriptUrl = new URL(env.gmailScriptUrl);
+    } catch {
+      throw new Error("GMAIL_SCRIPT_URL is not a valid URL. Remove it or replace it with the deployed Apps Script web app URL.");
+    }
+
+    const response = await fetch(gmailScriptUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

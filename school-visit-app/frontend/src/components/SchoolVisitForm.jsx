@@ -356,6 +356,9 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
             {successReport.duplicateReport && (
               <p>Possible duplicate found for the same school, visit date, and purpose. Please review tracking.</p>
             )}
+            {successReport.report?.emailLastError && (
+              <p>Email error: {successReport.report.emailLastError}</p>
+            )}
           </div>
           <div className="success-actions">
             {successReport.report?.pdfUrl && (

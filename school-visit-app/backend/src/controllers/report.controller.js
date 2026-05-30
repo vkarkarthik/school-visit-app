@@ -243,6 +243,7 @@ export const createReportController = asyncHandler(async (req, res) => {
       success: true,
       message: [
         emailStatus === "Sent" ? "Report created and email sent." : "Report created but email failed.",
+        emailStatus === "Failed" && emailLastError ? `Email error: ${emailLastError}` : "",
         duplicateReport ? "Possible duplicate visit found for the same school, date, and purpose." : "",
         isNewSchoolVisit
           ? report.newSchoolSheetStatus === "Saved"

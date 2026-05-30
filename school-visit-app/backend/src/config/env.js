@@ -1,6 +1,14 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+function cleanOptional(value) {
+  const cleaned = String(value || "").trim();
+  if (!cleaned || cleaned.toLowerCase() === "undefined" || cleaned.toLowerCase() === "null") {
+    return undefined;
+  }
+  return cleaned;
+}
+
 const defaultSchoolMasterRanges = [
   "'Telangana/AP'!A:Z",
   "'North'!A:Z",
@@ -33,14 +41,14 @@ export const env = {
     apiSecret: process.env.CLOUDINARY_API_SECRET,
   },
   smtp: {
-    host: process.env.SMTP_HOST,
+    host: cleanOptional(process.env.SMTP_HOST),
     port: Number(process.env.SMTP_PORT || 587),
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-    fromName: process.env.MAIL_FROM_NAME,
-    fromEmail: process.env.MAIL_FROM_EMAIL,
-    cc: process.env.MAIL_CC || "",
+    user: cleanOptional(process.env.SMTP_USER),
+    pass: cleanOptional(process.env.SMTP_PASS)?.replace(/\s+/g, ""),
+    fromName: cleanOptional(process.env.MAIL_FROM_NAME),
+    fromEmail: cleanOptional(process.env.MAIL_FROM_EMAIL),
+    cc: cleanOptional(process.env.MAIL_CC) || "",
   },
-  gmailScriptUrl: process.env.GMAIL_SCRIPT_URL,
+  gmailScriptUrl: cleanOptional(process.env.GMAIL_SCRIPT_URL),
   appBaseUrl: process.env.APP_BASE_URL || "http://localhost:5173",
 };
