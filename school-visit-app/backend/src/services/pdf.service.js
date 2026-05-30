@@ -1,6 +1,17 @@
 import puppeteer from "puppeteer";
+import { existsSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+
+const serviceDir = dirname(fileURLToPath(import.meta.url));
+const backendDir = join(serviceDir, "../..");
+const renderCacheDir = join(backendDir, ".cache/puppeteer");
 
 export async function generatePdfBuffer(html) {
+  if (existsSync(renderCacheDir)) {
+    process.env.PUPPETEER_CACHE_DIR = renderCacheDir;
+  }
+
   const browser = await puppeteer.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"]
