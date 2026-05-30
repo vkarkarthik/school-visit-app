@@ -94,7 +94,7 @@ async function parseAppsScriptResponse(response) {
 }
 
 export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdfBuffer }) {
-  const ccList = mergeEmailLists(env.smtp.cc, cc);
+  const ccList = mergeEmailLists(replyTo, env.smtp.cc, cc);
   const logoBase64 = existsSync(logoPath) ? readFileSync(logoPath).toString("base64") : "";
 
   if (env.gmailScriptUrl) {
