@@ -76,6 +76,23 @@ function mergeEmailLists(...values) {
     });
 }
 
+async function parseAppsScriptResponse(response) {
+  const body = await response.text();
+
+  try {
+    return JSON.parse(body);
+  } catch {
+    const preview = body.trim().slice(0, 120);
+    if (preview.startsWith("<!DOCTYPE") || preview.startsWith("<html")) {
+      throw new Error(
+        "Apps Script returned an HTML page instead of JSON. Check that GMAIL_SCRIPT_URL is the Web App /exec URL and access is set to Anyone."
+      );
+    }
+
+    throw new Error(`Apps Script returned invalid JSON: ${preview || response.statusText}`);
+  }
+}
+
 export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdfBuffer }) {
   const ccList = mergeEmailLists(env.smtp.cc, cc);
 
@@ -103,7 +120,7 @@ export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdf
       }),
     });
 
-    const result = await response.json();
+    const result = await parseAppsScriptResponse(response);
 
     if (!result.success) {
       throw new Error(result.error || "Apps Script email sending failed");
