@@ -16,6 +16,7 @@ const defaultSchoolMasterRanges = [
   "'Tamil Nadu'!A:Z",
   "'Kerala'!A:Z",
 ];
+const defaultMailCc = "vasudevan@superteacher.in,bhanu@superteacher.in";
 
 export const env = {
   port: Number(process.env.PORT || 5000),
@@ -47,7 +48,7 @@ export const env = {
     pass: cleanOptional(process.env.SMTP_PASS)?.replace(/\s+/g, ""),
     fromName: cleanOptional(process.env.MAIL_FROM_NAME),
     fromEmail: cleanOptional(process.env.MAIL_FROM_EMAIL),
-    cc: cleanOptional(process.env.MAIL_CC) || "",
+    cc: cleanOptional(process.env.MAIL_CC) || defaultMailCc,
   },
   gmailScriptUrl: cleanOptional(process.env.GMAIL_SCRIPT_URL),
   appBaseUrl: process.env.APP_BASE_URL || "http://localhost:5173",
