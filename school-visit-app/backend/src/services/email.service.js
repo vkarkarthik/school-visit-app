@@ -6,6 +6,7 @@ import { env } from "../config/env.js";
 
 const serviceDir = dirname(fileURLToPath(import.meta.url));
 const logoPath = join(serviceDir, "../../assets/superteacher-logo.png");
+const SMTP_TIMEOUT_MS = 12000;
 
 function createTransporter(port = env.smtp.port) {
   return nodemailer.createTransport({
@@ -20,9 +21,9 @@ function createTransporter(port = env.smtp.port) {
     tls: {
       servername: env.smtp.host,
     },
-    connectionTimeout: 90000,
-    greetingTimeout: 90000,
-    socketTimeout: 90000,
+    connectionTimeout: SMTP_TIMEOUT_MS,
+    greetingTimeout: SMTP_TIMEOUT_MS,
+    socketTimeout: SMTP_TIMEOUT_MS,
   });
 }
 

@@ -10,7 +10,24 @@ const app = express();
 const appDir = dirname(fileURLToPath(import.meta.url));
 const reportArchiveDir = join(appDir, '../generated/reports');
 
-app.use(cors({ origin: env.frontendUrl, credentials: true }));
+const allowedOrigins = String(env.frontendUrl || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin) || /^https:\/\/school-visit-app.*\.vercel\.app$/.test(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/api/reports/pdfs', express.static(reportArchiveDir));
