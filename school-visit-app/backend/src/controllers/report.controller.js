@@ -126,6 +126,10 @@ export const createReportController = asyncHandler(async (req, res) => {
     throw new AppError("Program manager email is not valid.", 400);
   }
 
+  if (String(sessionSummary).includes("...") || String(actionItems || "").includes("...")) {
+    throw new AppError("Please replace all ... placeholders with actual visit details before sending.", 400);
+  }
+
   const invalidCc = parseEmailList(ccEmails).find((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
   if (invalidCc) {
     throw new AppError(`Invalid CC email: ${invalidCc}`, 400);

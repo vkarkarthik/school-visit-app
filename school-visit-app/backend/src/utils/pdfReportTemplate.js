@@ -16,6 +16,7 @@ export function buildPdfReportHtml(data) {
 
   const generatedDateText = formatDate(new Date());
   const reportId = buildReportId(data);
+  const purposeObjective = getPurposeObjective(data.purposeOfVisit);
 
   const photosHtml = data.photos?.length
     ? data.photos
@@ -123,6 +124,7 @@ export function buildPdfReportHtml(data) {
 
         .section {
           margin-top: 18px;
+          page-break-inside: avoid;
         }
 
         .section-title {
@@ -160,6 +162,7 @@ export function buildPdfReportHtml(data) {
           border-radius: 8px;
           padding: 12px 14px;
           white-space: pre-wrap;
+          word-break: break-word;
         }
 
         .summary-box {
@@ -309,6 +312,10 @@ export function buildPdfReportHtml(data) {
               <td>${escapeHtml(data.contactNo || "-")}</td>
             </tr>
             <tr>
+              <td class="label-cell">Course / Program</td>
+              <td>${escapeHtml(data.course || "-")}</td>
+            </tr>
+            <tr>
               <td class="label-cell">Program Manager</td>
               <td>${escapeHtml(data.programManagerName)}</td>
             </tr>
@@ -324,27 +331,32 @@ export function buildPdfReportHtml(data) {
         </div>
 
         <div class="section">
-          <div class="section-title">2. Session Summary</div>
+          <div class="section-title">2. Visit Objective</div>
+          <div class="content-box">${escapeHtml(purposeObjective)}</div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">3. Detailed Session Record</div>
           <div class="content-box summary-box">${escapeHtml(data.sessionSummary || "-")}</div>
         </div>
 
         <div class="section">
-          <div class="section-title">3. Action Items / Follow-up</div>
+          <div class="section-title">4. Follow-up Plan / Next Steps</div>
           <div class="content-box">${escapeHtml(data.actionItems || "No action items noted.")}</div>
         </div>
 
         <div class="section">
-          <div class="section-title">4. Next Visit / Follow-up Schedule</div>
+          <div class="section-title">5. Next Visit / Follow-up Schedule</div>
           <div class="content-box">${escapeHtml(nextVisitText)}</div>
         </div>
 
         <div class="section">
-          <div class="section-title">5. Additional Remarks</div>
+          <div class="section-title">6. Additional Remarks</div>
           <div class="content-box">${escapeHtml(data.remarks || "No additional remarks.")}</div>
         </div>
 
         <div class="section">
-          <div class="section-title">6. Supporting Photos / Evidence</div>
+          <div class="section-title">7. Supporting Photos / Evidence</div>
           <div class="photos-wrapper">
             ${photosHtml}
           </div>
@@ -381,6 +393,29 @@ function buildReportId(data) {
   const dd = String(date.getDate()).padStart(2, "0");
 
   return `SVR-${school}-${yyyy}${mm}${dd}`;
+}
+
+function getPurposeObjective(purposeValue) {
+  const purpose = String(purposeValue || "").trim().toLowerCase();
+  const objectives = {
+    "new school visit / demo":
+      "Understand the school's requirement, present the relevant SuperTeacher solution, capture decision-maker feedback, and define the next sales/program follow-up.",
+    "teachers copy":
+      "Document the teacher copy/material handover, confirm quantities and recipients, explain usage expectations, and record any pending material or coordination requirements.",
+    "induction training":
+      "Orient the school team on the selected program/module, platform access, implementation workflow, classroom usage expectations, support process, and immediate readiness requirements.",
+    "teachers training":
+      "Train teachers on the specific topics/modules covered during the visit, demonstrate classroom usage, address implementation questions, and capture any additional support required.",
+    "robotics training":
+      "Conduct a robotics-focused session covering the planned concept/activity, record participation and hands-on outcomes, and identify kit, material, or follow-up support needs.",
+    "admin related work":
+      "Close or review administrative, documentation, approval, payment, material, or operational coordination items connected to the school's implementation.",
+  };
+
+  return (
+    objectives[purpose] ||
+    "Document the purpose, key discussion points, school inputs, outcomes, and agreed follow-up from the visit."
+  );
 }
 
 function formatDate(value) {

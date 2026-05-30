@@ -1,14 +1,13 @@
 export function buildReportHtml(data) {
   const content = getPurposeEmailContent(data);
-
   const visitDateText = formatDate(data.visitDate);
   const nextVisitText = data.nextVisitDate
     ? formatDate(data.nextVisitDate)
     : "Will be shared separately based on mutual availability and requirement.";
 
   const photosText = data.photos?.length
-    ? `Session photos have also been documented and included as part of the reporting process.`
-    : `Session photos were not attached in this submission.`;
+    ? "Session photos have also been documented and included as part of the reporting process."
+    : "Session photos were not attached in this submission.";
 
   return `
   <div style="font-family: Arial, sans-serif; background:#edf7f3; padding:24px; color:#17202a;">
@@ -34,15 +33,9 @@ export function buildReportHtml(data) {
         </p>
 
         <p>
-          ${content.intro(data)}
-        </p>
-
-        <p>
-          ${content.body1(data)}
-        </p>
-
-        <p>
-          ${content.body2(data)}
+          Please find below the visit update recorded for <strong>${escapeHtml(
+            data.schoolName
+          )}</strong>. This note documents what was covered, the school team's inputs, and the agreed follow-up points.
         </p>
 
         <div style="background:#f7fbf9; border:1px solid #d7e7df; border-radius:12px; padding:0; margin:20px 0; overflow:hidden;">
@@ -53,6 +46,7 @@ export function buildReportHtml(data) {
             ${buildSnapshotRow("School", data.schoolName)}
             ${buildSnapshotRow("School Type", data.isNewSchool ? "New / Prospect School" : "Existing School")}
             ${buildSnapshotRow("Location", `${data.city || "-"}, ${data.state || "-"}`)}
+            ${buildSnapshotRow("Course / Program", data.course || "-")}
             ${buildSnapshotRow("Program Manager", data.programManagerName)}
             ${buildSnapshotRow("Purpose of Visit", data.purposeOfVisit)}
             ${buildSnapshotRow("Date of Visit", visitDateText)}
@@ -61,30 +55,33 @@ export function buildReportHtml(data) {
         </div>
 
         <div style="margin:18px 0;">
-          <div style="font-weight:700; color:#12649b; margin-bottom:6px;">Brief Session Summary</div>
+          <div style="font-weight:700; color:#173723; margin-bottom:6px;">Visit Objective</div>
+          <div style="background:#f7fbf9; border:1px solid #d7e7df; border-radius:10px; padding:12px 14px;">
+            ${escapeHtml(content.objective)}
+          </div>
+        </div>
+
+        <div style="margin:18px 0;">
+          <div style="font-weight:700; color:#12649b; margin-bottom:6px;">Detailed Session Record</div>
           <div style="background:#fffef9; border:1px solid #d7e7df; border-radius:10px; padding:12px 14px;">
             ${nl2br(escapeHtml(data.sessionSummary))}
           </div>
         </div>
 
         <div style="margin:18px 0;">
-          <div style="font-weight:700; color:#2f8a38; margin-bottom:6px;">Immediate Follow-up / Next Steps</div>
+          <div style="font-weight:700; color:#2f8a38; margin-bottom:6px;">Follow-up Plan / Next Steps</div>
           <div style="background:#ecf8ef; border:1px solid #cfe9d6; border-radius:10px; padding:12px 14px;">
             ${nl2br(escapeHtml(data.actionItems || content.defaultActionText))}
           </div>
         </div>
 
-        <p>
-          ${photosText}
-        </p>
+        <p>${photosText}</p>
 
         <p>
           For your ready reference and record, a <strong>detailed PDF report</strong> containing the complete visit documentation has been attached along with this email.
         </p>
 
-        <p>
-          ${content.closing(data)}
-        </p>
+        <p>${escapeHtml(content.closing)}</p>
 
         <p style="margin-bottom:0;">
           Regards,<br>
@@ -113,150 +110,67 @@ function buildSnapshotRow(label, value) {
 function getPurposeEmailContent(data) {
   const purpose = String(data.purposeOfVisit || "").trim().toLowerCase();
 
-  if (purpose === "new school visit / demo") {
-    return {
-      intro: (data) =>
-        `This is to share the update regarding the introductory discussion/demo conducted with <strong>${escapeHtml(
-          data.schoolName
-        )}</strong> on <strong>${escapeHtml(formatDate(data.visitDate))}</strong>.`,
-
-      body1: () =>
-        `The visit focused on understanding the school's requirements, current academic and operational priorities, and the possible fitment of SuperTeacher programs. The discussion/demo was intended to give the school team a clear view of the solution, implementation approach, expected outcomes, and support process.`,
-
-      body2: () =>
-        `The interaction also helped identify the next decision points, stakeholders to be aligned, and any information needed for the school to evaluate the program further. This visit has been recorded as a new/prospect school engagement for follow-up and internal tracking.`,
-
+  const contentByPurpose = {
+    "new school visit / demo": {
+      objective:
+        "Understand the school's requirement, present the relevant SuperTeacher solution, capture decision-maker feedback, and define the next sales/program follow-up.",
       defaultActionText:
         "Please review the discussed solution internally and share your requirements, questions, or preferred next meeting schedule.",
-
-      closing: () =>
-        `Thank you for your time and interest. We look forward to continuing the discussion and supporting your school with the next steps.`
-    };
-  }
-
-  if (purpose === "teachers copy") {
-    return {
-      intro: (data) =>
-        `This is to share the update regarding the school visit conducted at <strong>${escapeHtml(
-          data.schoolName
-        )}</strong> for the purpose of teacher materials / teacher copy handover and related coordination.`,
-
-      body1: () =>
-        `During the visit, the required academic and implementation-related materials were reviewed/shared, and the necessary coordination was carried out with the concerned school stakeholders. The objective of this visit was to ensure smooth access to the required teaching resources and to support readiness for effective classroom usage.`,
-
-      body2: () =>
-        `We also used this opportunity to clarify any immediate queries connected to the materials provided, their intended usage, and the next steps required from the school side for smooth implementation.`,
-
+      closing:
+        "Thank you for your time and interest. We look forward to continuing the discussion and supporting your school with the next steps.",
+    },
+    "teachers copy": {
+      objective:
+        "Document the teacher copy/material handover, confirm quantities and recipients, explain usage expectations, and record any pending material or coordination requirements.",
       defaultActionText:
         "Please review the materials shared and confirm any pending requirements or support needed from our side.",
-
-      closing: () =>
-        `We appreciate the support and coordination extended by your school during this process. We remain available for any further clarification or assistance related to the materials shared.`
-    };
-  }
-
-  if (purpose === "induction training") {
-    return {
-      intro: (data) =>
-        `This is to share the update regarding the induction training conducted at <strong>${escapeHtml(
-          data.schoolName
-        )}</strong> on <strong>${escapeHtml(formatDate(data.visitDate))}</strong>.`,
-
-      body1: () =>
-        `The visit focused on orienting the school team to the program structure, key academic and operational components, available resources, and the overall approach for implementation. The session was designed to build a clear foundational understanding and ensure that the school team is aligned on expectations, usage, and support systems.`,
-
-      body2: () =>
-        `The interaction also helped establish the initial roadmap for implementation, clarify early-stage questions, and strengthen readiness for the next phase of engagement. Such induction sessions are important to ensure that the program begins on a strong and well-supported foundation.`,
-
+      closing:
+        "We appreciate the support and coordination extended by your school during this process. We remain available for any further clarification or assistance related to the materials shared.",
+    },
+    "induction training": {
+      objective:
+        "Orient the school team on the selected program/module, platform access, implementation workflow, classroom usage expectations, support process, and immediate readiness requirements.",
       defaultActionText:
         "Please review the discussed implementation points internally and keep the relevant team members aligned for the next phase of execution.",
-
-      closing: () =>
-        `Thank you for the participation and cooperation extended during the induction session. We look forward to working closely with your team in the upcoming stages of implementation.`
-    };
-  }
-
-  if (purpose === "teachers training") {
-    return {
-      intro: (data) =>
-        `This is to share the visit update regarding the teachers training session conducted at <strong>${escapeHtml(
-          data.schoolName
-        )}</strong>.`,
-
-      body1: () =>
-        `The session was focused on strengthening teachers’ understanding of the program resources, classroom usage approach, and the practical integration of the tools shared during implementation. The training aimed to build teacher confidence, improve familiarity with the expected workflow, and support effective classroom execution.`,
-
-      body2: () =>
-        `In addition to the training delivery, the visit also helped identify areas where further academic or implementation support may be useful. Such teacher-facing sessions are essential in ensuring consistency, quality, and confidence in day-to-day classroom adoption.`,
-
+      closing:
+        "Thank you for the participation and cooperation extended during the induction session. We look forward to working closely with your team in the upcoming stages of implementation.",
+    },
+    "teachers training": {
+      objective:
+        "Train teachers on the specific topics/modules covered during the visit, demonstrate classroom usage, address implementation questions, and capture any additional support required.",
       defaultActionText:
         "Teachers may continue internal practice/review of the covered tools and methods, and any follow-up support points may be shared for the next visit.",
-
-      closing: () =>
-        `We sincerely appreciate the active participation of the teaching staff and the support extended by the school team. We look forward to continuing this collaboration through future capacity-building sessions.`
-    };
-  }
-
-  if (purpose === "robotics training") {
-    return {
-      intro: (data) =>
-        `This is to share the visit update regarding the robotics training session conducted at <strong>${escapeHtml(
-          data.schoolName
-        )}</strong>.`,
-
-      body1: () =>
-        `The session was designed to provide structured exposure to robotics learning through guided activities, practical engagement, and concept-based interaction. The purpose of the visit was to support understanding, participation, and confidence in the use of robotics-related learning resources and activities.`,
-
-      body2: () =>
-        `The training also served as an opportunity to assess readiness, engagement levels, and any additional support that may be required for smoother implementation in future sessions. Hands-on exposure plays an important role in building learner interest and confidence in robotics education.`,
-
+      closing:
+        "We sincerely appreciate the active participation of the teaching staff and the support extended by the school team. We look forward to continuing this collaboration through future capacity-building sessions.",
+    },
+    "robotics training": {
+      objective:
+        "Conduct a robotics-focused session covering the planned concept/activity, record participation and hands-on outcomes, and identify kit, material, or follow-up support needs.",
       defaultActionText:
         "Please continue encouraging participation and identify any support needs for the next robotics-focused engagement.",
-
-      closing: () =>
-        `Thank you for your cooperation and support during the robotics training. We look forward to building further momentum through upcoming sessions and continued engagement.`
-    };
-  }
-
-  if (purpose === "admin related work") {
-    return {
-      intro: (data) =>
-        `This is to share the visit update regarding the administrative work carried out during the school visit to <strong>${escapeHtml(
-          data.schoolName
-        )}</strong>.`,
-
-      body1: () =>
-        `The visit focused on completing and reviewing the required administrative coordination, discussing operational matters, and aligning on the relevant documentation or process-related points connected to school implementation. The interaction was intended to ensure smoother coordination and timely completion of necessary formalities.`,
-
-      body2: () =>
-        `This visit also helped bring clarity to pending process items, identify the next required actions, and strengthen coordination between the school and our team for ongoing implementation-related needs.`,
-
+      closing:
+        "Thank you for your cooperation and support during the robotics training. We look forward to building further momentum through upcoming sessions and continued engagement.",
+    },
+    "admin related work": {
+      objective:
+        "Close or review administrative, documentation, approval, payment, material, or operational coordination items connected to the school's implementation.",
       defaultActionText:
         "Please review the discussed administrative points and support closure of the pending items, wherever applicable.",
-
-      closing: () =>
-        `We appreciate the coordination and support provided by your team during this visit. Please feel free to reach out in case any additional clarification or follow-up is required.`
-    };
-  }
-
-  return {
-    intro: (data) =>
-      `This is to share the visit update regarding the session conducted at <strong>${escapeHtml(
-        data.schoolName
-      )}</strong>.`,
-
-    body1: () =>
-      `The visit was conducted as part of the ongoing implementation and support process. It provided an opportunity to engage with the school team, review progress, and address the relevant requirements connected to the purpose of the visit.`,
-
-    body2: () =>
-      `The session also helped identify any next steps, support needs, and areas of continued coordination for smooth implementation going forward.`,
-
-    defaultActionText:
-      "Please review the discussed points and share any support requirements for the next phase.",
-
-    closing: () =>
-      `Thank you for your support and cooperation. We look forward to continued collaboration with your school.`
+      closing:
+        "We appreciate the coordination and support provided by your team during this visit. Please feel free to reach out in case any additional clarification or follow-up is required.",
+    },
   };
+
+  return (
+    contentByPurpose[purpose] || {
+      objective:
+        "Document the purpose, key discussion points, school inputs, outcomes, and agreed follow-up from the visit.",
+      defaultActionText:
+        "Please review the discussed points and share any support requirements for the next phase.",
+      closing:
+        "Thank you for your support and cooperation. We look forward to continued collaboration with your school.",
+    }
+  );
 }
 
 function formatDate(value) {

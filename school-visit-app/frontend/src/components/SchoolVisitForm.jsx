@@ -239,6 +239,12 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
     if (!form.purposeOfVisit) nextErrors.purposeOfVisit = 'Purpose is required.';
     if (!form.visitDate) nextErrors.visitDate = 'Visit date is required.';
     if (!form.sessionSummary.trim()) nextErrors.sessionSummary = 'Session summary is required.';
+    if (form.sessionSummary.includes('...')) {
+      nextErrors.sessionSummary = 'Replace all ... placeholders with actual visit details.';
+    }
+    if (form.actionItems.includes('...')) {
+      nextErrors.actionItems = 'Replace all ... placeholders with actual follow-up details.';
+    }
 
     const invalidCc = form.ccEmails
       .split(',')
@@ -577,6 +583,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
                 placeholder="List next steps, owner, and expected follow-up."
                 rows="4"
               />
+              {renderError('actionItems')}
             </label>
 
             <label>
