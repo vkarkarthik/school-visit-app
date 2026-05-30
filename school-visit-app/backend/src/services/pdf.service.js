@@ -5,6 +5,8 @@ import { fileURLToPath } from "url";
 const serviceDir = dirname(fileURLToPath(import.meta.url));
 const backendDir = join(serviceDir, "../..");
 const renderCacheDir = join(backendDir, ".cache/puppeteer");
+const PDF_PAGE_TIMEOUT_MS = 15000;
+const IMAGE_WAIT_TIMEOUT_MS = 5000;
 
 export async function generatePdfBuffer(html) {
   if (existsSync(renderCacheDir)) {
@@ -20,20 +22,26 @@ export async function generatePdfBuffer(html) {
 
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    page.setDefaultNavigationTimeout(PDF_PAGE_TIMEOUT_MS);
+    page.setDefaultTimeout(PDF_PAGE_TIMEOUT_MS);
 
-    await page.evaluate(async () => {
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: PDF_PAGE_TIMEOUT_MS });
+
+    await page.evaluate(async (imageWaitTimeoutMs) => {
       const images = Array.from(document.images);
       await Promise.all(
         images.map((img) => {
           if (img.complete) return Promise.resolve();
-          return new Promise((resolve) => {
-            img.onload = resolve;
-            img.onerror = resolve;
-          });
+          return Promise.race([
+            new Promise((resolve) => {
+              img.onload = resolve;
+              img.onerror = resolve;
+            }),
+            new Promise((resolve) => setTimeout(resolve, imageWaitTimeoutMs)),
+          ]);
         })
       );
-    });
+    }, IMAGE_WAIT_TIMEOUT_MS);
 
     return await page.pdf({
       format: "A4",
