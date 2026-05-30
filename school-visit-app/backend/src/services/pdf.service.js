@@ -1,4 +1,3 @@
-import puppeteer from "puppeteer";
 import { existsSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -11,6 +10,8 @@ export async function generatePdfBuffer(html) {
   if (existsSync(renderCacheDir)) {
     process.env.PUPPETEER_CACHE_DIR = renderCacheDir;
   }
+
+  const { default: puppeteer } = await import("puppeteer");
 
   const browser = await puppeteer.launch({
     headless: true,
