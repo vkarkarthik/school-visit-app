@@ -168,3 +168,188 @@ export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdf
     attachments,
   });
 }
+
+function buildPlanNotificationHtml(plan) {
+  const dateLabel = plan.plannedDate ? new Date(plan.plannedDate).toLocaleDateString("en-IN") : "";
+  const timeLabel =
+    plan.plannedStartTime || plan.plannedEndTime
+      ? `${plan.plannedStartTime || "--"} to ${plan.plannedEndTime || "--"}`
+      : "Time not specified";
+
+  return `
+    <div style="font-family: Arial, sans-serif; color: #17202a; line-height: 1.5;">
+      <h2 style="margin-bottom: 8px;">Visit plan confirmed</h2>
+      <p style="margin-top: 0;">A school visit plan has been confirmed in the scheduler.</p>
+      <table style="border-collapse: collapse; width: 100%; max-width: 720px;">
+        <tbody>
+          <tr><td style="padding: 8px; border: 1px solid #d7e7df; font-weight: bold;">Program Manager</td><td style="padding: 8px; border: 1px solid #d7e7df;">${plan.programManagerName || ""} (${plan.programManagerEmail || ""})</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #d7e7df; font-weight: bold;">School</td><td style="padding: 8px; border: 1px solid #d7e7df;">${plan.schoolName || ""}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #d7e7df; font-weight: bold;">Location</td><td style="padding: 8px; border: 1px solid #d7e7df;">${plan.city || ""}, ${plan.state || ""}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #d7e7df; font-weight: bold;">Purpose</td><td style="padding: 8px; border: 1px solid #d7e7df;">${plan.purposeOfVisit || ""}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #d7e7df; font-weight: bold;">Planned Date</td><td style="padding: 8px; border: 1px solid #d7e7df;">${dateLabel}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #d7e7df; font-weight: bold;">Planned Time</td><td style="padding: 8px; border: 1px solid #d7e7df;">${timeLabel}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #d7e7df; font-weight: bold;">Work Planned</td><td style="padding: 8px; border: 1px solid #d7e7df;">${plan.workPlanned || ""}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #d7e7df; font-weight: bold;">Point of Contact</td><td style="padding: 8px; border: 1px solid #d7e7df;">${plan.pointOfContact || "-"} ${plan.contactNo ? `| ${plan.contactNo}` : ""}</td></tr>
+          <tr><td style="padding: 8px; border: 1px solid #d7e7df; font-weight: bold;">Notes</td><td style="padding: 8px; border: 1px solid #d7e7df;">${plan.planningNotes || "-"}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+export async function sendPlanNotificationEmail(plan) {
+  const to = plan.programManagerEmail;
+  const cc = env.smtp.cc;
+  const subject = `Visit Plan Confirmed | ${plan.schoolName} | ${plan.programManagerName} | ${new Date(plan.plannedDate).toLocaleDateString("en-IN")}`;
+  const html = buildPlanNotificationHtml(plan);
+  const logoBase64 = existsSync(logoPath) ? readFileSync(logoPath).toString("base64") : "";
+
+  if (env.gmailScriptUrl) {
+    let gmailScriptUrl;
+    try {
+      gmailScriptUrl = new URL(env.gmailScriptUrl);
+    } catch {
+      throw new Error("GMAIL_SCRIPT_URL is not a valid URL. Remove it or replace it with the deployed Apps Script web app URL.");
+    }
+
+    const response = await fetch(gmailScriptUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to,
+        cc,
+        replyTo: plan.programManagerEmail,
+        subject,
+        html,
+        pdfBase64: null,
+        pdfFileName: null,
+        logoBase64,
+        logoContentType: "image/png",
+        logoContentId: "superteacherLogo",
+      }),
+    });
+
+    const result = await parseAppsScriptResponse(response);
+
+    if (!result.success) {
+      throw new Error(result.error || "Apps Script email sending failed");
+    }
+
+    return result;
+  }
+
+  return sendMailWithFallback({
+    from: {
+      name: env.smtp.fromName || "School Visit Planner",
+      address: env.smtp.fromEmail || env.smtp.user,
+    },
+    to,
+    cc: cc || undefined,
+    subject,
+    html,
+    attachments: existsSync(logoPath)
+      ? [
+          {
+            filename: "superteacher-logo.png",
+            path: logoPath,
+            cid: "superteacherLogo",
+          },
+        ]
+      : [],
+  });
+}
+
+async function sendSimpleOperationalEmail({ to, cc, replyTo, subject, html }) {
+  const logoBase64 = existsSync(logoPath) ? readFileSync(logoPath).toString("base64") : "";
+
+  if (env.gmailScriptUrl) {
+    const response = await fetch(new URL(env.gmailScriptUrl), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to,
+        cc,
+        replyTo,
+        subject,
+        html,
+        pdfBase64: null,
+        pdfFileName: null,
+        logoBase64,
+        logoContentType: "image/png",
+        logoContentId: "superteacherLogo",
+      }),
+    });
+
+    const result = await parseAppsScriptResponse(response);
+    if (!result.success) throw new Error(result.error || "Apps Script email sending failed");
+    return result;
+  }
+
+  return sendMailWithFallback({
+    from: {
+      name: env.smtp.fromName || "School Visit Planner",
+      address: env.smtp.fromEmail || env.smtp.user,
+    },
+    to,
+    cc: cc || undefined,
+    replyTo: replyTo || undefined,
+    subject,
+    html,
+    attachments: existsSync(logoPath)
+      ? [
+          {
+            filename: "superteacher-logo.png",
+            path: logoPath,
+            cid: "superteacherLogo",
+          },
+        ]
+      : [],
+  });
+}
+
+export async function sendPlanReminderEmail(plan) {
+  const dateLabel = plan.plannedDate ? new Date(plan.plannedDate).toLocaleDateString("en-IN") : "";
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #17202a; line-height: 1.6;">
+      <h2>Visit reminder</h2>
+      <p>This is a reminder for an upcoming school visit plan.</p>
+      <p><strong>School:</strong> ${plan.schoolName || ""}</p>
+      <p><strong>Date:</strong> ${dateLabel}</p>
+      <p><strong>Time:</strong> ${plan.plannedStartTime || "--"} to ${plan.plannedEndTime || "--"}</p>
+      <p><strong>Purpose:</strong> ${plan.purposeOfVisit || ""}</p>
+      <p><strong>Planned work:</strong> ${plan.workPlanned || ""}</p>
+    </div>
+  `;
+
+  return sendSimpleOperationalEmail({
+    to: plan.programManagerEmail,
+    cc: env.smtp.cc,
+    replyTo: plan.programManagerEmail,
+    subject: `Visit Reminder | ${plan.schoolName} | ${dateLabel}`,
+    html,
+  });
+}
+
+export async function sendFollowUpReminderEmail(report) {
+  const nextVisitLabel = report.nextVisitDate ? new Date(report.nextVisitDate).toLocaleDateString("en-IN") : "Not scheduled";
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #17202a; line-height: 1.6;">
+      <h2>Follow-up reminder</h2>
+      <p>A follow-up is due for the report below.</p>
+      <p><strong>School:</strong> ${report.schoolName || ""}</p>
+      <p><strong>Program Manager:</strong> ${report.programManagerName || ""}</p>
+      <p><strong>Next follow-up:</strong> ${nextVisitLabel}</p>
+      <p><strong>Action items:</strong> ${report.actionItems || "No action items recorded."}</p>
+    </div>
+  `;
+
+  return sendSimpleOperationalEmail({
+    to: report.programManagerEmail,
+    cc: env.smtp.cc,
+    replyTo: report.programManagerEmail,
+    subject: `Follow-up Reminder | ${report.schoolName} | ${nextVisitLabel}`,
+    html,
+  });
+}

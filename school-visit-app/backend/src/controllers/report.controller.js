@@ -8,9 +8,10 @@ import cloudinary from "../config/cloudinary.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
 import { generatePdfBuffer } from "../services/pdf.service.js";
-import { sendVisitReportEmail } from "../services/email.service.js";
+import { sendFollowUpReminderEmail, sendVisitReportEmail } from "../services/email.service.js";
 import { appendNewSchoolToSheet } from "../services/sheets.service.js";
 import { VisitReport } from "../models/VisitReport.js";
+import { VisitPlan } from "../models/VisitPlan.js";
 import { buildReportHtml } from "../utils/htmlReportTemplate.js";
 import { buildPdfReportHtml } from "../utils/pdfReportTemplate.js";
 
@@ -24,6 +25,33 @@ function parseEmailList(value) {
     .split(",")
     .map((email) => email.trim())
     .filter(Boolean);
+}
+
+function normalizeActionItemsDetailed(value, fallbackActionItems = "", fallbackOwner = "", fallbackDueDate = "") {
+  const list = Array.isArray(value)
+    ? value
+        .map((item) => ({
+          title: String(item?.title || "").trim(),
+          owner: String(item?.owner || fallbackOwner || "Program Manager").trim(),
+          dueDate: item?.dueDate ? new Date(item.dueDate) : fallbackDueDate ? new Date(fallbackDueDate) : undefined,
+          status: ["Pending", "In Progress", "Completed", "Blocked"].includes(item?.status) ? item.status : "Pending",
+          notes: String(item?.notes || "").trim(),
+        }))
+        .filter((item) => item.title)
+    : [];
+
+  if (list.length) return list;
+  if (!String(fallbackActionItems || "").trim()) return [];
+
+  return [
+    {
+      title: String(fallbackActionItems).trim(),
+      owner: fallbackOwner || "Program Manager",
+      dueDate: fallbackDueDate ? new Date(fallbackDueDate) : undefined,
+      status: "Pending",
+      notes: "",
+    },
+  ];
 }
 
 async function savePdfArchive(pdfBuffer, schoolName, visitDate) {
@@ -96,8 +124,10 @@ export const createReportController = asyncHandler(async (req, res) => {
     visitDate,
     sessionSummary,
     actionItems,
+    actionItemsDetailed,
     nextVisitDate,
     remarks,
+    sourcePlanId,
   } = req.body;
   const isNewSchoolVisit = isNewSchool === true || isNewSchool === "true";
 
@@ -154,6 +184,13 @@ export const createReportController = asyncHandler(async (req, res) => {
       console.log("STEP 2 SKIPPED: No photos uploaded");
     }
 
+    const normalizedActionItemsDetailed = normalizeActionItemsDetailed(
+      typeof actionItemsDetailed === "string" ? JSON.parse(actionItemsDetailed || "[]") : actionItemsDetailed,
+      actionItems,
+      programManagerName,
+      nextVisitDate
+    );
+
     const payload = {
       isNewSchool: isNewSchoolVisit,
       state,
@@ -171,9 +208,11 @@ export const createReportController = asyncHandler(async (req, res) => {
       visitDate,
       sessionSummary,
       actionItems,
+      actionItemsDetailed: normalizedActionItemsDetailed,
       nextVisitDate: nextVisitDate || undefined,
       remarks,
       photos,
+      sourcePlanId: sourcePlanId || undefined,
       year: new Date(visitDate).getFullYear(),
     };
 
@@ -226,6 +265,14 @@ export const createReportController = asyncHandler(async (req, res) => {
       salesLeadStatus: isNewSchoolVisit ? "Pending" : "Not Required",
     });
     console.log("STEP 7 DONE: Report saved");
+
+    if (sourcePlanId) {
+      await VisitPlan.findByIdAndUpdate(sourcePlanId, {
+        status: "Completed",
+        convertedReportId: report._id,
+        convertedAt: new Date(),
+      });
+    }
 
     if (isNewSchoolVisit) {
       try {
@@ -286,11 +333,12 @@ export const getSchoolTrackingController = asyncHandler(async (req, res) => {
   } = req.query;
 
   const filter = {};
+  if (!req.isAdmin) filter.programManagerEmail = req.userEmail;
   if (schoolName) filter.schoolName = schoolName;
   if (state) filter.state = state;
   if (year) filter.year = Number(year);
   if (emailStatus) filter.emailStatus = emailStatus;
-  if (programManagerName) filter.programManagerName = new RegExp(programManagerName, "i");
+  if (programManagerName && req.isAdmin) filter.programManagerName = new RegExp(programManagerName, "i");
   if (purposeOfVisit) filter.purposeOfVisit = purposeOfVisit;
   if (isNewSchool === "true") filter.isNewSchool = true;
   if (isNewSchool === "false") filter.isNewSchool = false;
@@ -310,6 +358,22 @@ export const getSchoolTrackingController = asyncHandler(async (req, res) => {
     .sort({ visitDate: -1, createdAt: -1 })
     .lean();
 
+  const now = new Date();
+  const uniqueSchools = new Set(reports.map((report) => `${report.state}__${report.schoolName}`)).size;
+  const activeManagers = new Set(reports.map((report) => report.programManagerEmail || report.programManagerName)).size;
+  const pendingActionItems = reports.flatMap((report) =>
+    (report.actionItemsDetailed || [])
+      .filter((item) => item.status !== "Completed")
+      .map((item) => ({
+        reportId: report._id,
+        schoolName: report.schoolName,
+        programManagerName: report.programManagerName,
+        visitDate: report.visitDate,
+        ...item,
+      }))
+  );
+  const overdueFollowUps = reports.filter((report) => report.nextVisitDate && new Date(report.nextVisitDate) < now).length;
+
   res.json({
     success: true,
     summary: {
@@ -318,7 +382,12 @@ export const getSchoolTrackingController = asyncHandler(async (req, res) => {
       failedReports: reports.filter((r) => r.emailStatus === "Failed").length,
       newSchoolReports: reports.filter((r) => r.isNewSchool).length,
       pendingNewSchools: reports.filter((r) => r.newSchoolApprovalStatus === "Pending").length,
+      uniqueSchools,
+      activeManagers,
+      pendingActionItems: pendingActionItems.length,
+      overdueFollowUps,
     },
+    pendingActionItems: pendingActionItems.slice(0, 20),
     reports,
   });
 });
@@ -330,11 +399,18 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
   const yearStart = new Date(year, 0, 1);
   const yearEnd = new Date(year + 1, 0, 1);
 
-  const reports = await VisitReport.find({
-    visitDate: { $gte: yearStart, $lt: yearEnd },
-  })
-    .sort({ createdAt: -1 })
-    .lean();
+  const [reports, plans] = await Promise.all([
+    VisitReport.find({
+      visitDate: { $gte: yearStart, $lt: yearEnd },
+    })
+      .sort({ createdAt: -1 })
+      .lean(),
+    VisitPlan.find({
+      plannedDate: { $gte: yearStart, $lt: yearEnd },
+    })
+      .sort({ plannedDate: 1, createdAt: -1 })
+      .lean(),
+  ]);
 
   const managerMap = new Map();
   const purposeMap = new Map();
@@ -343,6 +419,18 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
     managerMap.set(report.programManagerName, (managerMap.get(report.programManagerName) || 0) + 1);
     purposeMap.set(report.purposeOfVisit, (purposeMap.get(report.purposeOfVisit) || 0) + 1);
   }
+
+  const pendingActionItems = reports.flatMap((report) =>
+    (report.actionItemsDetailed || [])
+      .filter((item) => item.status !== "Completed")
+      .map((item) => ({
+        reportId: report._id,
+        schoolName: report.schoolName,
+        programManagerName: report.programManagerName,
+        nextVisitDate: report.nextVisitDate,
+        ...item,
+      }))
+  );
 
   res.json({
     success: true,
@@ -354,6 +442,12 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
       newSchoolReports: reports.filter((r) => r.isNewSchool).length,
       pendingNewSchools: reports.filter((r) => r.newSchoolApprovalStatus === "Pending").length,
       sheetSyncFailed: reports.filter((r) => r.newSchoolSheetStatus === "Failed").length,
+      uniqueSchools: new Set(reports.map((r) => `${r.state}__${r.schoolName}`)).size,
+      activeManagers: new Set(reports.map((r) => r.programManagerEmail || r.programManagerName)).size,
+      plannedVisits: plans.length,
+      convertedPlans: plans.filter((plan) => plan.convertedReportId).length,
+      pendingActionItems: pendingActionItems.length,
+      overdueFollowUps: reports.filter((r) => r.nextVisitDate && new Date(r.nextVisitDate) < now).length,
     },
     byManager: [...managerMap.entries()]
       .map(([name, count]) => ({ name, count }))
@@ -364,9 +458,13 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
     recentReports: reports.slice(0, 10),
     failedReports: reports.filter((r) => r.emailStatus === "Failed").slice(0, 10),
     pendingNewSchools: reports.filter((r) => r.newSchoolApprovalStatus === "Pending").slice(0, 10),
+    pendingActionItems: pendingActionItems.slice(0, 10),
     upcomingFollowUps: reports
       .filter((r) => r.nextVisitDate && new Date(r.nextVisitDate) >= now)
       .sort((a, b) => new Date(a.nextVisitDate) - new Date(b.nextVisitDate))
+      .slice(0, 10),
+    upcomingPlans: plans
+      .filter((plan) => ["Confirmed", "Draft"].includes(plan.status) && new Date(plan.plannedDate) >= now)
       .slice(0, 10),
   });
 });
@@ -384,6 +482,27 @@ export const previewReportPdfController = asyncHandler(async (req, res) => {
   res.send(pdfBuffer);
 });
 
+export const getReportPdfController = asyncHandler(async (req, res) => {
+  const report = await VisitReport.findById(req.params.id).lean();
+  if (!report) {
+    throw new AppError("Report not found.", 404);
+  }
+
+  const pdfHtml = buildPdfReportHtml({
+    ...report,
+    isNewSchool: report.isNewSchool === true,
+    photos: Array.isArray(report.photos) ? report.photos : [],
+  });
+  const pdfBuffer = await generatePdfBuffer(pdfHtml);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `inline; filename="${String(report.schoolName || "school-visit-report").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.pdf"`
+  );
+  res.send(pdfBuffer);
+});
+
 export const getSchoolTimelineController = asyncHandler(async (req, res) => {
   const { schoolName, state } = req.query;
   if (!schoolName) {
@@ -392,6 +511,7 @@ export const getSchoolTimelineController = asyncHandler(async (req, res) => {
 
   const filter = { schoolName };
   if (state) filter.state = state;
+  if (!req.isAdmin) filter.programManagerEmail = req.userEmail;
 
   const reports = await VisitReport.find(filter)
     .sort({ visitDate: -1, createdAt: -1 })
@@ -413,6 +533,7 @@ export const updateReportController = asyncHandler(async (req, res) => {
     "programManagerEmail",
     "sessionSummary",
     "actionItems",
+    "actionItemsDetailed",
     "nextVisitDate",
     "remarks",
     "reportStatus",
@@ -423,7 +544,10 @@ export const updateReportController = asyncHandler(async (req, res) => {
 
   for (const key of allowed) {
     if (Object.prototype.hasOwnProperty.call(req.body, key)) {
-      patch[key] = req.body[key] || undefined;
+      patch[key] =
+        key === "actionItemsDetailed"
+          ? normalizeActionItemsDetailed(req.body[key], req.body.actionItems, req.body.programManagerName, req.body.nextVisitDate)
+          : req.body[key] || undefined;
     }
   }
 
@@ -488,4 +612,19 @@ export const resendReportEmailController = asyncHandler(async (req, res) => {
     await report.save();
     throw new AppError(error.message || "Failed to resend email.", 500);
   }
+});
+
+export const sendFollowUpReminderController = asyncHandler(async (req, res) => {
+  const filter = req.isAdmin ? { _id: req.params.id } : { _id: req.params.id, programManagerEmail: req.userEmail };
+  const report = await VisitReport.findOne(filter);
+  if (!report) {
+    throw new AppError("Report not found.", 404);
+  }
+
+  await sendFollowUpReminderEmail(report.toObject());
+
+  res.json({
+    success: true,
+    message: "Follow-up reminder sent successfully.",
+  });
 });

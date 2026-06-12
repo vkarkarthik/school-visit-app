@@ -9,6 +9,22 @@ const PhotoSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const ActionItemSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    owner: { type: String, default: "Program Manager" },
+    dueDate: Date,
+    status: {
+      type: String,
+      enum: ["Pending", "In Progress", "Completed", "Blocked"],
+      default: "Pending",
+      index: true,
+    },
+    notes: String,
+  },
+  { _id: true }
+);
+
 const VisitReportSchema = new mongoose.Schema(
   {
     state: { type: String, required: true, index: true },
@@ -25,8 +41,10 @@ const VisitReportSchema = new mongoose.Schema(
     ccEmails: String,
     purposeOfVisit: { type: String, required: true },
     visitDate: { type: Date, required: true, index: true },
+    sourcePlanId: { type: mongoose.Schema.Types.ObjectId, ref: "VisitPlan", index: true },
     sessionSummary: { type: String, required: true },
     actionItems: String,
+    actionItemsDetailed: [ActionItemSchema],
     nextVisitDate: Date,
     remarks: String,
     reportStatus: {

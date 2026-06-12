@@ -6,6 +6,7 @@ export default function OperationsDashboard() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [year, setYear] = useState(new Date().getFullYear());
+  const [previewReport, setPreviewReport] = useState(null);
 
   useEffect(() => {
     loadDashboard();
@@ -62,6 +63,12 @@ export default function OperationsDashboard() {
             <Metric label="New Schools" value={summary.newSchoolReports} tone="blue" />
             <Metric label="Pending Leads" value={summary.pendingNewSchools} tone="yellow" />
             <Metric label="Sheet Sync Failed" value={summary.sheetSyncFailed} tone="red" />
+            <Metric label="Unique Schools" value={summary.uniqueSchools} />
+            <Metric label="Active PMs" value={summary.activeManagers} />
+            <Metric label="Planned Visits" value={summary.plannedVisits} tone="blue" />
+            <Metric label="Converted Plans" value={summary.convertedPlans} tone="green" />
+            <Metric label="Pending Actions" value={summary.pendingActionItems} tone="yellow" />
+            <Metric label="Overdue Follow-ups" value={summary.overdueFollowUps} tone="red" />
           </div>
 
           <div className="dashboard-grid">
@@ -93,14 +100,31 @@ export default function OperationsDashboard() {
           </div>
 
           <div className="dashboard-grid wide">
+            <Panel title="Upcoming Planned Visits">
+              <PlanList
+                plans={dashboard.upcomingPlans}
+                emptyText="No upcoming plans."
+                action={(plan) => (
+                  <button type="button" className="table-action" onClick={() => sendPlanReminder(plan._id)}>
+                    Remind
+                  </button>
+                )}
+              />
+            </Panel>
+
             <Panel title="Upcoming Follow-ups">
               <ReportList
                 reports={dashboard.upcomingFollowUps}
                 emptyText="No upcoming follow-ups."
                 action={(report) => (
-                  <span className="status-pill sent">
-                    {new Date(report.nextVisitDate).toLocaleDateString('en-IN')}
-                  </span>
+                  <div className="row-actions">
+                    <span className="status-pill sent">
+                      {new Date(report.nextVisitDate).toLocaleDateString('en-IN')}
+                    </span>
+                    <button type="button" className="table-action" onClick={() => sendFollowUpReminder(report._id)}>
+                      Remind
+                    </button>
+                  </div>
                 )}
               />
             </Panel>
@@ -146,9 +170,31 @@ export default function OperationsDashboard() {
             </Panel>
           </div>
 
-          <Panel title="Recent Reports">
-            <ReportList reports={dashboard.recentReports} emptyText="No reports yet." />
+          <Panel title="Pending Action Tracker">
+            <ActionList items={dashboard.pendingActionItems} emptyText="No pending action items." />
           </Panel>
+
+          <Panel title="Recent Reports">
+            <ReportList
+              reports={dashboard.recentReports}
+              emptyText="No reports yet."
+              action={(report) => (
+                <div className="row-actions">
+                  <button type="button" className="table-action" onClick={() => openPreview(report)}>
+                    Preview
+                  </button>
+                  <span className={`status-pill ${report.emailStatus === 'Sent' ? 'sent' : 'failed'}`}>{report.emailStatus}</span>
+                </div>
+              )}
+            />
+          </Panel>
+
+          {previewReport && (
+            <ReportPreviewModal
+              report={previewReport}
+              onClose={closePreview}
+            />
+          )}
         </>
       )}
     </section>
@@ -162,6 +208,35 @@ export default function OperationsDashboard() {
     } catch (error) {
       setMessage(error.response?.data?.message || 'Could not update lead status.');
     }
+  }
+
+  async function sendFollowUpReminder(reportId) {
+    setMessage('');
+    try {
+      const response = await api.post(`/reports/${reportId}/send-reminder`);
+      setMessage(response.data.message || 'Reminder sent.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Could not send follow-up reminder.');
+    }
+  }
+
+  async function sendPlanReminder(planId) {
+    setMessage('');
+    try {
+      const response = await api.post(`/plans/${planId}/remind`);
+      setMessage(response.data.message || 'Reminder sent.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Could not send plan reminder.');
+    }
+  }
+
+  async function openPreview(report) {
+    setMessage('');
+    setPreviewReport(report);
+  }
+
+  function closePreview() {
+    setPreviewReport(null);
   }
 }
 
@@ -215,6 +290,110 @@ function ReportList({ reports = [], emptyText, action }) {
           {action ? action(report) : <span className={`status-pill ${report.emailStatus === 'Sent' ? 'sent' : 'failed'}`}>{report.emailStatus}</span>}
         </div>
       ))}
+    </div>
+  );
+}
+
+function PlanList({ plans = [], emptyText, action }) {
+  if (!plans?.length) return <div className="empty-state">{emptyText}</div>;
+
+  return (
+    <div className="report-list">
+      {plans.map((plan) => (
+        <div key={plan._id} className="report-row">
+          <div>
+            <strong>{plan.schoolName}</strong>
+            <span>
+              {new Date(plan.plannedDate).toLocaleDateString('en-IN')} | {plan.purposeOfVisit} | {plan.programManagerName}
+            </span>
+          </div>
+          {action ? action(plan) : <span className={`status-pill ${getPlanTone(plan.status)}`}>{plan.status}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ActionList({ items = [], emptyText }) {
+  if (!items?.length) return <div className="empty-state">{emptyText}</div>;
+
+  return (
+    <div className="report-list">
+      {items.map((item) => (
+        <div key={`${item.reportId}-${item._id || item.title}`} className="report-row">
+          <div>
+            <strong>{item.schoolName}</strong>
+            <span>
+              {item.title} | {item.owner || 'Program Manager'} | {item.status}
+              {item.dueDate ? ` | Due ${new Date(item.dueDate).toLocaleDateString('en-IN')}` : ''}
+            </span>
+          </div>
+          <span className={`status-pill ${item.status === 'Completed' ? 'sent' : item.status === 'Blocked' ? 'failed' : 'warning'}`}>
+            {item.status}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function getPlanTone(status) {
+  if (status === 'Completed') return 'sent';
+  if (status === 'Cancelled') return 'failed';
+  if (status === 'Confirmed') return 'info';
+  return 'warning';
+}
+
+function ReportPreviewModal({ report, onClose }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="modal-card report-preview-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="panel-header compact">
+          <div>
+            <span className="eyebrow">Report preview</span>
+            <h2>{report.schoolName}</h2>
+            <p className="muted-text">
+              {new Date(report.visitDate).toLocaleDateString('en-IN')} | {report.purposeOfVisit} | {report.programManagerName}
+            </p>
+          </div>
+          <div className="row-actions">
+            <button type="button" className="table-action" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div className="preview-meta-grid">
+          <div>
+            <strong>School Email</strong>
+            <span>{report.schoolEmail || '-'}</span>
+          </div>
+          <div>
+            <strong>Contact</strong>
+            <span>{report.pointOfContact || '-'} {report.contactNo ? `| ${report.contactNo}` : ''}</span>
+          </div>
+          <div>
+            <strong>Status</strong>
+            <span>{report.emailStatus || '-'}</span>
+          </div>
+          <div>
+            <strong>Next Follow-up</strong>
+            <span>{report.nextVisitDate ? new Date(report.nextVisitDate).toLocaleDateString('en-IN') : '-'}</span>
+          </div>
+        </div>
+
+        <div className="preview-copy-grid">
+          <div className="preview-copy-card">
+            <strong>Session Summary</strong>
+            <p>{report.sessionSummary || 'No summary available.'}</p>
+          </div>
+          <div className="preview-copy-card">
+            <strong>Action Items</strong>
+            <p>{report.actionItems || 'No action items available.'}</p>
+          </div>
+        </div>
+
+      </section>
     </div>
   );
 }

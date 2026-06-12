@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { api } from '../api/client';
 
-export default function TrackingDashboard({ schoolMaster, currentUser }) {
+export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }) {
   const [filters, setFilters] = useState({
     state: '',
     schoolName: '',
@@ -24,6 +24,7 @@ export default function TrackingDashboard({ schoolMaster, currentUser }) {
   });
   const [reports, setReports] = useState([]);
   const [timeline, setTimeline] = useState([]);
+  const [pendingActionItems, setPendingActionItems] = useState([]);
   const [editingReport, setEditingReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -45,6 +46,7 @@ export default function TrackingDashboard({ schoolMaster, currentUser }) {
       const response = await api.get('/reports/tracking', { params });
       setSummary(response.data.summary);
       setReports(response.data.reports);
+      setPendingActionItems(response.data.pendingActionItems || []);
     } catch (error) {
       setMessage(error.response?.data?.message || 'Failed to load tracking.');
     } finally {
@@ -107,6 +109,19 @@ export default function TrackingDashboard({ schoolMaster, currentUser }) {
     }
   };
 
+  const sendReminder = async (reportId) => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const response = await api.post(`/reports/${reportId}/send-reminder`);
+      setMessage(response.data.message);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Failed to send reminder.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadTimeline = async () => {
     if (!filters.schoolName) {
       setMessage('Select a school to load timeline.');
@@ -138,6 +153,8 @@ export default function TrackingDashboard({ schoolMaster, currentUser }) {
         ccEmails: editingReport.ccEmails,
         sessionSummary: editingReport.sessionSummary,
         actionItems: editingReport.actionItems,
+        actionItemsDetailed: editingReport.actionItemsDetailed,
+        nextVisitDate: editingReport.nextVisitDate,
         remarks: editingReport.remarks,
         reportStatus: 'Needs Correction'
       });
@@ -156,7 +173,7 @@ export default function TrackingDashboard({ schoolMaster, currentUser }) {
       <div className="panel-header">
         <div>
           <span className="eyebrow">Monitoring</span>
-          <h2>School tracking</h2>
+          <h2>{isAdmin ? 'School tracking' : 'My report tracking'}</h2>
         </div>
         <span className="panel-badge">Yearly</span>
       </div>
@@ -307,14 +324,16 @@ export default function TrackingDashboard({ schoolMaster, currentUser }) {
           />
         </label>
 
-        <label>
-          Manager
-          <input
-            value={filters.programManagerName}
-            onChange={(e) => setFilters({ ...filters, programManagerName: e.target.value })}
-            placeholder={currentUser?.name || 'Search manager'}
-          />
-        </label>
+        {isAdmin && (
+          <label>
+            Manager
+            <input
+              value={filters.programManagerName}
+              onChange={(e) => setFilters({ ...filters, programManagerName: e.target.value })}
+              placeholder={currentUser?.name || 'Search manager'}
+            />
+          </label>
+        )}
 
         <div className="align-end">
           <button onClick={handleLoad} disabled={loading} className="secondary-button">
@@ -356,6 +375,18 @@ export default function TrackingDashboard({ schoolMaster, currentUser }) {
           <span>Pending Leads</span>
           <strong>{summary.pendingNewSchools}</strong>
         </div>
+        <div className="stat-card">
+          <span>Unique Schools</span>
+          <strong>{summary.uniqueSchools || 0}</strong>
+        </div>
+        <div className="stat-card">
+          <span>{isAdmin ? 'Active PMs' : 'Pending Actions'}</span>
+          <strong>{isAdmin ? summary.activeManagers || 0 : summary.pendingActionItems || 0}</strong>
+        </div>
+        <div className="stat-card">
+          <span>Overdue Follow-ups</span>
+          <strong>{summary.overdueFollowUps || 0}</strong>
+        </div>
       </div>
 
       <div className="table-wrap">
@@ -371,7 +402,8 @@ export default function TrackingDashboard({ schoolMaster, currentUser }) {
               <th>Sheet</th>
               <th>Lead</th>
               <th>Resends</th>
-              <th>PDF</th>
+              <th>Follow-up</th>
+              <th>Actions</th>
               <th>Action</th>
             </tr>
           </thead>
@@ -400,22 +432,32 @@ export default function TrackingDashboard({ schoolMaster, currentUser }) {
                 <td>{report.salesLeadStatus || 'Not Required'}</td>
                 <td>{report.resendCount || 0}</td>
                 <td>
-                  {report.pdfUrl ? (
-                    <a href={report.pdfUrl} target="_blank" rel="noreferrer">
-                      Open PDF
-                    </a>
-                  ) : (
-                    'Not saved'
-                  )}
+                  {report.nextVisitDate ? new Date(report.nextVisitDate).toLocaleDateString('en-IN') : 'Not planned'}
+                </td>
+                <td>
+                  {(report.actionItemsDetailed || []).filter((item) => item.status !== 'Completed').length || 0}
                 </td>
                 <td>
                   <div className="row-actions">
-                    <button type="button" className="table-action" onClick={() => setEditingReport(report)} disabled={loading}>
-                      Edit
-                    </button>
-                    <button type="button" className="table-action" onClick={() => resendReport(report._id)} disabled={loading}>
-                      Resend
-                    </button>
+                    {isAdmin ? (
+                      <>
+                        <button type="button" className="table-action" onClick={() => setEditingReport(report)} disabled={loading}>
+                          Edit
+                        </button>
+                        <button type="button" className="table-action" onClick={() => resendReport(report._id)} disabled={loading}>
+                          Resend
+                        </button>
+                        {report.nextVisitDate && (
+                          <button type="button" className="table-action" onClick={() => sendReminder(report._id)} disabled={loading}>
+                            Remind
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <button type="button" className="table-action" onClick={() => sendReminder(report._id)} disabled={loading}>
+                        Remind
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -441,6 +483,26 @@ export default function TrackingDashboard({ schoolMaster, currentUser }) {
                   <span>{report.programManagerName} | {report.emailStatus} | Next: {report.nextVisitDate ? new Date(report.nextVisitDate).toLocaleDateString('en-IN') : 'Not planned'}</span>
                 </div>
                 {report.pdfUrl && <a href={report.pdfUrl} target="_blank" rel="noreferrer">PDF</a>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {pendingActionItems.length > 0 && (
+        <div className="timeline-panel">
+          <div className="panel-header compact">
+            <h2>Pending Action Tracker</h2>
+          </div>
+          <div className="report-list">
+            {pendingActionItems.map((item) => (
+              <div key={`${item.reportId}-${item._id || item.title}`} className="report-row">
+                <div>
+                  <strong>{item.schoolName} | {item.title}</strong>
+                  <span>
+                    {item.programManagerName} | {item.owner || 'Program Manager'} | {item.status}
+                    {item.dueDate ? ` | Due ${new Date(item.dueDate).toLocaleDateString('en-IN')}` : ''}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
@@ -477,10 +539,73 @@ export default function TrackingDashboard({ schoolMaster, currentUser }) {
                 Action Items
                 <textarea rows="4" value={editingReport.actionItems || ''} onChange={(e) => setEditingReport({ ...editingReport, actionItems: e.target.value })} />
               </label>
+              <label>
+                Next Follow-up
+                <input
+                  type="date"
+                  value={editingReport.nextVisitDate ? new Date(editingReport.nextVisitDate).toISOString().slice(0, 10) : ''}
+                  onChange={(e) => setEditingReport({ ...editingReport, nextVisitDate: e.target.value })}
+                />
+              </label>
               <label className="full-width">
                 Remarks
                 <textarea rows="3" value={editingReport.remarks || ''} onChange={(e) => setEditingReport({ ...editingReport, remarks: e.target.value })} />
               </label>
+              <div className="full-width action-editor">
+                <div className="panel-header compact">
+                  <h2>Structured Action Tracker</h2>
+                  <button
+                    type="button"
+                    className="table-action"
+                    onClick={() =>
+                      setEditingReport({
+                        ...editingReport,
+                        actionItemsDetailed: [
+                          ...(editingReport.actionItemsDetailed || []),
+                          { title: '', owner: editingReport.programManagerName || 'Program Manager', dueDate: editingReport.nextVisitDate || '', status: 'Pending', notes: '' },
+                        ],
+                      })
+                    }
+                  >
+                    Add Action
+                  </button>
+                </div>
+                <div className="action-edit-list">
+                  {(editingReport.actionItemsDetailed || []).map((item, index) => (
+                    <div key={`${item._id || 'new'}-${index}`} className="action-edit-card">
+                      <input
+                        placeholder="Action title"
+                        value={item.title || ''}
+                        onChange={(e) => updateActionItem(index, 'title', e.target.value)}
+                      />
+                      <input
+                        placeholder="Owner"
+                        value={item.owner || ''}
+                        onChange={(e) => updateActionItem(index, 'owner', e.target.value)}
+                      />
+                      <input
+                        type="date"
+                        value={item.dueDate ? new Date(item.dueDate).toISOString().slice(0, 10) : ''}
+                        onChange={(e) => updateActionItem(index, 'dueDate', e.target.value)}
+                      />
+                      <select value={item.status || 'Pending'} onChange={(e) => updateActionItem(index, 'status', e.target.value)}>
+                        <option>Pending</option>
+                        <option>In Progress</option>
+                        <option>Completed</option>
+                        <option>Blocked</option>
+                      </select>
+                      <textarea
+                        rows="2"
+                        placeholder="Notes"
+                        value={item.notes || ''}
+                        onChange={(e) => updateActionItem(index, 'notes', e.target.value)}
+                      />
+                      <button type="button" className="table-action" onClick={() => removeActionItem(index)}>Remove</button>
+                    </div>
+                  ))}
+                  {!(editingReport.actionItemsDetailed || []).length && <div className="empty-state">No structured action items yet.</div>}
+                </div>
+              </div>
             </div>
             <div className="modal-actions">
               <button type="button" className="ghost-button" onClick={() => setEditingReport(null)}>Cancel</button>
@@ -491,4 +616,20 @@ export default function TrackingDashboard({ schoolMaster, currentUser }) {
       )}
     </aside>
   );
+
+  function updateActionItem(index, field, value) {
+    setEditingReport((prev) => ({
+      ...prev,
+      actionItemsDetailed: (prev.actionItemsDetailed || []).map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item
+      ),
+    }));
+  }
+
+  function removeActionItem(index) {
+    setEditingReport((prev) => ({
+      ...prev,
+      actionItemsDetailed: (prev.actionItemsDetailed || []).filter((_, itemIndex) => itemIndex !== index),
+    }));
+  }
 }

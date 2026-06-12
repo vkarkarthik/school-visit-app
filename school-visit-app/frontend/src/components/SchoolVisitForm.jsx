@@ -82,6 +82,7 @@ const PURPOSE_GUIDES = {
 };
 
 const emptyForm = (currentUser = {}) => ({
+  sourcePlanId: '',
   isNewSchool: 'false',
   state: '',
   schoolName: '',
@@ -104,7 +105,7 @@ const emptyForm = (currentUser = {}) => ({
   remarks: ''
 });
 
-export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad, onDraftLoaded, onReportCreated }) {
+export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad, planToConvert, onDraftLoaded, onPlanLoaded, onReportCreated }) {
   const [form, setForm] = useState(() => {
     try {
       const saved = localStorage.getItem('schoolVisitDraft');
@@ -151,6 +152,32 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
     setMessage('Draft loaded.');
     onDraftLoaded?.();
   }, [draftToLoad, currentUser, onDraftLoaded]);
+
+  useEffect(() => {
+    if (!planToConvert) return;
+
+    setForm({
+      ...emptyForm(currentUser),
+      sourcePlanId: planToConvert._id || '',
+      isNewSchool: 'false',
+      state: planToConvert.state || '',
+      schoolName: planToConvert.schoolName || '',
+      city: planToConvert.city || '',
+      pointOfContact: planToConvert.pointOfContact || '',
+      contactNo: planToConvert.contactNo || '',
+      schoolEmail: planToConvert.schoolEmail || '',
+      course: planToConvert.course || '',
+      programManagerName: planToConvert.programManagerName || currentUser?.name || '',
+      programManagerEmail: planToConvert.programManagerEmail || currentUser?.email || '',
+      purposeOfVisit: planToConvert.purposeOfVisit || '',
+      visitDate: planToConvert.plannedDate ? new Date(planToConvert.plannedDate).toISOString().slice(0, 10) : '',
+      actionItems: planToConvert.workPlanned || '',
+      remarks: planToConvert.planningNotes || '',
+      nextVisitDate: '',
+    });
+    setMessage('Plan loaded. Complete the visit details and submit the report.');
+    onPlanLoaded?.();
+  }, [planToConvert, currentUser, onPlanLoaded]);
 
   useEffect(() => {
     setForm((prev) => ({

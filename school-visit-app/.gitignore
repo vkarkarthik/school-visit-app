@@ -6,4 +6,6 @@ backend/.env
 frontend/.env
 backend/credentials/service-account.json
 backend/generated/
+backend/.cache/
 dist
+frontend/dist/

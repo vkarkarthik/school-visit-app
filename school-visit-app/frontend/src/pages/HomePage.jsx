@@ -4,6 +4,7 @@ import AdminSettings from '../components/AdminSettings';
 import DraftsPanel from '../components/DraftsPanel';
 import GoogleLoginPanel, { isGoogleConfigured } from '../components/GoogleLoginPanel';
 import OperationsDashboard from '../components/OperationsDashboard';
+import SchedulerPanel from '../components/SchedulerPanel';
 import SchoolVisitForm from '../components/SchoolVisitForm';
 import TrackingDashboard from '../components/TrackingDashboard';
 
@@ -40,6 +41,7 @@ export default function HomePage() {
   const [schoolMasterError, setSchoolMasterError] = useState('');
   const [activeView, setActiveView] = useState('report');
   const [draftToLoad, setDraftToLoad] = useState(null);
+  const [planToConvert, setPlanToConvert] = useState(null);
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem('schoolVisitUser');
@@ -61,7 +63,11 @@ export default function HomePage() {
   const isAdmin = ADMIN_EMAILS.has(String(currentUser.email || '').trim().toLowerCase());
 
   useEffect(() => {
-    if (!isAdmin && activeView !== 'report') {
+    const allowedViews = isAdmin
+      ? new Set(['scheduler', 'report', 'drafts', 'tracking', 'dashboard', 'settings'])
+      : new Set(['scheduler', 'report', 'drafts', 'tracking']);
+
+    if (!allowedViews.has(activeView)) {
       setActiveView('report');
     }
   }, [activeView, isAdmin]);
@@ -190,6 +196,13 @@ export default function HomePage() {
             <nav className="view-tabs" aria-label="Workspace views">
               <button
                 type="button"
+                className={activeView === 'scheduler' ? 'active' : ''}
+                onClick={() => setActiveView('scheduler')}
+              >
+                Scheduler
+              </button>
+              <button
+                type="button"
                 className={activeView === 'report' ? 'active' : ''}
                 onClick={() => setActiveView('report')}
               >
@@ -235,7 +248,23 @@ export default function HomePage() {
                   schoolMaster={schoolMaster}
                   currentUser={currentUser}
                   draftToLoad={draftToLoad}
+                  planToConvert={planToConvert}
                   onDraftLoaded={() => setDraftToLoad(null)}
+                  onPlanLoaded={() => setPlanToConvert(null)}
+                />
+              </div>
+            )}
+
+            {activeView === 'scheduler' && (
+              <div className="single-workspace">
+                <SchedulerPanel
+                  schoolMaster={schoolMaster}
+                  currentUser={currentUser}
+                  isAdmin={isAdmin}
+                  onConvertToReport={(plan) => {
+                    setPlanToConvert(plan);
+                    setActiveView('report');
+                  }}
                 />
               </div>
             )}
@@ -253,7 +282,7 @@ export default function HomePage() {
 
             {activeView === 'tracking' && (
               <div className="single-workspace">
-                <TrackingDashboard schoolMaster={schoolMaster} currentUser={currentUser} />
+                <TrackingDashboard schoolMaster={schoolMaster} currentUser={currentUser} isAdmin={isAdmin} />
               </div>
             )}
 

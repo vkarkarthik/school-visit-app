@@ -20,6 +20,27 @@ const NEW_SCHOOL_HEADERS = [
   "Remarks",
   "Report ID",
 ];
+const PLANNER_LOG_HEADERS = [
+  "Logged At",
+  "Action",
+  "Plan ID",
+  "Status",
+  "Program Manager",
+  "Program Manager Email",
+  "School Name",
+  "State",
+  "City",
+  "Purpose of Visit",
+  "Work Planned",
+  "Planned Date",
+  "Start Time",
+  "End Time",
+  "Point of Contact",
+  "Contact Number",
+  "School Email",
+  "Course / Requirement",
+  "Planning Notes",
+];
 
 function normalizeHeader(header) {
   return String(header || "").trim().toLowerCase();
@@ -277,6 +298,63 @@ async function ensureNewSchoolsSheet() {
   }
 }
 
+async function ensureSheetWithHeadersInSpreadsheet(spreadsheetId, sheetName, headers, headerRange) {
+  const spreadsheet = await sheetsClient.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets.properties.title",
+  });
+
+  const sheetExists = (spreadsheet.data.sheets || []).some(
+    (sheet) => sheet.properties?.title === sheetName
+  );
+
+  if (!sheetExists) {
+    await sheetsClient.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            addSheet: {
+              properties: {
+                title: sheetName,
+              },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  const headerResponse = await sheetsClient.spreadsheets.values.get({
+    spreadsheetId,
+    range: headerRange,
+  });
+
+  if (!headerResponse.data.values?.length) {
+    await sheetsClient.spreadsheets.values.update({
+      spreadsheetId,
+      range: headerRange,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [headers],
+      },
+    });
+  }
+}
+
+function buildPlannerSheetTabName(plan) {
+  const baseName =
+    String(plan.programManagerEmail || "").split("@")[0] ||
+    String(plan.programManagerName || "").trim() ||
+    env.plannerLogSheetName;
+
+  return `PM - ${baseName}`
+    .replace(/[\[\]\*\/\\\?\:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 90);
+}
+
 export async function appendNewSchoolToSheet(report) {
   await ensureNewSchoolsSheet();
 
@@ -303,6 +381,50 @@ export async function appendNewSchoolToSheet(report) {
   await sheetsClient.spreadsheets.values.append({
     spreadsheetId: env.spreadsheetId,
     range: `'${env.newSchoolsSheetName}'!A:Q`,
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {
+      values: [row],
+    },
+  });
+}
+
+export async function appendPlanLogToSheet(plan, action = "Created") {
+  const plannerSpreadsheetId = env.plannerSpreadsheetId;
+  const plannerTabName = buildPlannerSheetTabName(plan);
+
+  await ensureSheetWithHeadersInSpreadsheet(
+    plannerSpreadsheetId,
+    plannerTabName,
+    PLANNER_LOG_HEADERS,
+    `'${plannerTabName}'!A1:S1`
+  );
+
+  const row = [
+    new Date().toLocaleString("en-IN"),
+    action,
+    String(plan._id || ""),
+    plan.status || "",
+    plan.programManagerName || "",
+    plan.programManagerEmail || "",
+    plan.schoolName || "",
+    plan.state || "",
+    plan.city || "",
+    plan.purposeOfVisit || "",
+    plan.workPlanned || "",
+    plan.plannedDate ? new Date(plan.plannedDate).toLocaleDateString("en-IN") : "",
+    plan.plannedStartTime || "",
+    plan.plannedEndTime || "",
+    plan.pointOfContact || "",
+    plan.contactNo || "",
+    plan.schoolEmail || "",
+    plan.course || "",
+    plan.planningNotes || "",
+  ];
+
+  await sheetsClient.spreadsheets.values.append({
+    spreadsheetId: plannerSpreadsheetId,
+    range: `'${plannerTabName}'!A:S`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
     requestBody: {
