@@ -7,6 +7,12 @@ export default function OperationsDashboard() {
   const [message, setMessage] = useState('');
   const [year, setYear] = useState(new Date().getFullYear());
   const [previewReport, setPreviewReport] = useState(null);
+  const [reportFilters, setReportFilters] = useState({
+    search: '',
+    manager: '',
+    purpose: '',
+    status: '',
+  });
 
   useEffect(() => {
     loadDashboard();
@@ -36,6 +42,21 @@ export default function OperationsDashboard() {
   };
 
   const summary = dashboard?.summary || {};
+  const filteredRecentReports = (dashboard?.recentReports || []).filter((report) => {
+    const search = reportFilters.search.toLowerCase();
+    const manager = reportFilters.manager.toLowerCase();
+    const purpose = reportFilters.purpose.toLowerCase();
+
+    const matchesSearch =
+      !search ||
+      String(report.schoolName || '').toLowerCase().includes(search) ||
+      String(report.state || '').toLowerCase().includes(search);
+    const matchesManager = !manager || String(report.programManagerName || '').toLowerCase().includes(manager);
+    const matchesPurpose = !purpose || String(report.purposeOfVisit || '').toLowerCase().includes(purpose);
+    const matchesStatus = !reportFilters.status || report.emailStatus === reportFilters.status;
+
+    return matchesSearch && matchesManager && matchesPurpose && matchesStatus;
+  });
 
   return (
     <section className="ops-dashboard">
@@ -175,18 +196,42 @@ export default function OperationsDashboard() {
           </Panel>
 
           <Panel title="Recent Reports">
-            <ReportList
-              reports={dashboard.recentReports}
-              emptyText="No reports yet."
-              action={(report) => (
-                <div className="row-actions">
-                  <button type="button" className="table-action" onClick={() => openPreview(report)}>
-                    Preview
-                  </button>
-                  <span className={`status-pill ${report.emailStatus === 'Sent' ? 'sent' : 'failed'}`}>{report.emailStatus}</span>
-                </div>
-              )}
-            />
+            <div className="report-card-filters">
+              <label>
+                Search
+                <input
+                  value={reportFilters.search}
+                  onChange={(e) => setReportFilters((prev) => ({ ...prev, search: e.target.value }))}
+                  placeholder="School or state"
+                />
+              </label>
+              <label>
+                Manager
+                <input
+                  value={reportFilters.manager}
+                  onChange={(e) => setReportFilters((prev) => ({ ...prev, manager: e.target.value }))}
+                  placeholder="PM name"
+                />
+              </label>
+              <label>
+                Purpose
+                <input
+                  value={reportFilters.purpose}
+                  onChange={(e) => setReportFilters((prev) => ({ ...prev, purpose: e.target.value }))}
+                  placeholder="Training / Demo"
+                />
+              </label>
+              <label>
+                Status
+                <select value={reportFilters.status} onChange={(e) => setReportFilters((prev) => ({ ...prev, status: e.target.value }))}>
+                  <option value="">All</option>
+                  <option value="Sent">Sent</option>
+                  <option value="Failed">Failed</option>
+                </select>
+              </label>
+            </div>
+
+            <ReportCardGrid reports={filteredRecentReports} emptyText="No reports yet." onPreview={openPreview} />
           </Panel>
 
           {previewReport && (
@@ -294,6 +339,43 @@ function ReportList({ reports = [], emptyText, action }) {
   );
 }
 
+function ReportCardGrid({ reports = [], emptyText, onPreview }) {
+  if (!reports.length) return <div className="empty-state">{emptyText}</div>;
+
+  return (
+    <div className="report-card-grid">
+      {reports.map((report) => (
+        <article key={report._id} className="report-card">
+          <div className="report-card-top">
+            <div>
+              <strong>{report.schoolName}</strong>
+              <span>
+                {new Date(report.visitDate).toLocaleDateString('en-IN')} | {report.purposeOfVisit}
+              </span>
+            </div>
+            <span className={`status-pill ${report.emailStatus === 'Sent' ? 'sent' : 'failed'}`}>{report.emailStatus}</span>
+          </div>
+
+          <div className="report-card-meta">
+            <span>{report.programManagerName}</span>
+            <span>{report.state || 'State pending'}</span>
+            <span>{report.pointOfContact || 'POC pending'}</span>
+            <span>{report.nextVisitDate ? `Next: ${new Date(report.nextVisitDate).toLocaleDateString('en-IN')}` : 'No next follow-up'}</span>
+          </div>
+
+          <p>{truncateText(report.sessionSummary || 'No summary available yet.', 180)}</p>
+
+          <div className="row-actions">
+            <button type="button" className="table-action" onClick={() => onPreview(report)}>
+              Preview
+            </button>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 function PlanList({ plans = [], emptyText, action }) {
   if (!plans?.length) return <div className="empty-state">{emptyText}</div>;
 
@@ -342,6 +424,12 @@ function getPlanTone(status) {
   if (status === 'Cancelled') return 'failed';
   if (status === 'Confirmed') return 'info';
   return 'warning';
+}
+
+function truncateText(value, maxLength = 180) {
+  const text = String(value || '').trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength).trim()}...`;
 }
 
 function ReportPreviewModal({ report, onClose }) {

@@ -1,7 +1,20 @@
 import { useMemo, useState } from 'react';
 import { api } from '../api/client';
 
+function formatDateInput(date) {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
 export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }) {
+  const today = useMemo(() => new Date(), []);
+  const defaultFrom = useMemo(() => formatDateInput(addDays(today, -30)), [today]);
+  const defaultTo = useMemo(() => formatDateInput(today), [today]);
   const [filters, setFilters] = useState({
     state: '',
     schoolName: '',
@@ -12,9 +25,10 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
     isNewSchool: '',
     newSchoolApprovalStatus: '',
     salesLeadStatus: '',
-    dateFrom: '',
-    dateTo: ''
+    dateFrom: defaultFrom,
+    dateTo: defaultTo
   });
+  const [rangePreset, setRangePreset] = useState('last30');
   const [summary, setSummary] = useState({
     totalReports: 0,
     sentReports: 0,
@@ -37,6 +51,35 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
       .filter((school) => school.state === filters.state)
       .sort((a, b) => a.schoolName.localeCompare(b.schoolName));
   }, [schools, filters.state]);
+
+  const applyRangePreset = (preset) => {
+    const base = new Date();
+    let dateFrom = '';
+    let dateTo = '';
+
+    if (preset === 'last7') {
+      dateFrom = formatDateInput(addDays(base, -7));
+      dateTo = formatDateInput(base);
+    }
+
+    if (preset === 'last30') {
+      dateFrom = formatDateInput(addDays(base, -30));
+      dateTo = formatDateInput(base);
+    }
+
+    if (preset === 'thisMonth') {
+      const monthStart = new Date(base.getFullYear(), base.getMonth(), 1);
+      dateFrom = formatDateInput(monthStart);
+      dateTo = formatDateInput(base);
+    }
+
+    setRangePreset(preset);
+    setFilters((prev) => ({
+      ...prev,
+      dateFrom,
+      dateTo
+    }));
+  };
 
   const handleLoad = async () => {
     setLoading(true);
@@ -306,23 +349,25 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
           </select>
         </label>
 
-        <label>
-          From
-          <input
-            type="date"
-            value={filters.dateFrom}
-            onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-          />
-        </label>
-
-        <label>
-          To
-          <input
-            type="date"
-            value={filters.dateTo}
-            onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-          />
-        </label>
+        <div className="full-span tracking-range-row">
+          <div className="scheduler-presets">
+            {[
+              { id: 'last7', label: 'Last 7 Days' },
+              { id: 'last30', label: 'Last 30 Days' },
+              { id: 'thisMonth', label: 'This Month' },
+              { id: 'all', label: 'All Time' }
+            ].map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={`scheduler-chip ${rangePreset === preset.id ? 'active' : ''}`}
+                onClick={() => applyRangePreset(preset.id)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {isAdmin && (
           <label>
@@ -389,87 +434,86 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
         </div>
       </div>
 
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Visit Date</th>
-              <th>Purpose</th>
-              <th>Type</th>
-              <th>Manager</th>
-              <th>Status</th>
-              <th>Email</th>
-              <th>Sheet</th>
-              <th>Lead</th>
-              <th>Resends</th>
-              <th>Follow-up</th>
-              <th>Actions</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {reports.map((report) => (
-              <tr key={report._id}>
-                <td>{new Date(report.visitDate).toLocaleDateString('en-IN')}</td>
-                <td>{report.purposeOfVisit}</td>
-                <td>{report.isNewSchool ? 'New' : 'Existing'}</td>
-                <td>{report.programManagerName}</td>
-                <td>
+      {!reports.length ? (
+        <div className="empty-state">No reports found.</div>
+      ) : (
+        <div className="tracking-card-grid">
+          {reports.map((report) => {
+            const pendingActions =
+              (report.actionItemsDetailed || []).filter((item) => item.status !== 'Completed').length || 0;
+
+            return (
+              <article key={report._id} className="tracking-card">
+                <div className="tracking-card-top">
+                  <div>
+                    <strong>{report.schoolName}</strong>
+                    <span>
+                      {new Date(report.visitDate).toLocaleDateString('en-IN')} | {report.purposeOfVisit}
+                    </span>
+                  </div>
                   <span className={`status-pill ${report.emailStatus === 'Sent' ? 'sent' : 'failed'}`}>
                     {report.emailStatus}
                   </span>
-                </td>
-                <td>{report.schoolEmail}</td>
-                <td>
-                  {report.isNewSchool ? (
-                    <span className={`status-pill ${report.newSchoolSheetStatus === 'Failed' ? 'failed' : 'sent'}`}>
-                      {report.newSchoolSheetStatus || 'Pending'}
-                    </span>
-                  ) : (
-                    <span className="muted-text">NA</span>
-                  )}
-                </td>
-                <td>{report.salesLeadStatus || 'Not Required'}</td>
-                <td>{report.resendCount || 0}</td>
-                <td>
-                  {report.nextVisitDate ? new Date(report.nextVisitDate).toLocaleDateString('en-IN') : 'Not planned'}
-                </td>
-                <td>
-                  {(report.actionItemsDetailed || []).filter((item) => item.status !== 'Completed').length || 0}
-                </td>
-                <td>
-                  <div className="row-actions">
-                    {isAdmin ? (
-                      <>
-                        <button type="button" className="table-action" onClick={() => setEditingReport(report)} disabled={loading}>
-                          Edit
-                        </button>
-                        <button type="button" className="table-action" onClick={() => resendReport(report._id)} disabled={loading}>
-                          Resend
-                        </button>
-                        {report.nextVisitDate && (
-                          <button type="button" className="table-action" onClick={() => sendReminder(report._id)} disabled={loading}>
-                            Remind
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      <button type="button" className="table-action" onClick={() => sendReminder(report._id)} disabled={loading}>
-                        Remind
-                      </button>
-                    )}
+                </div>
+
+                <div className="tracking-card-meta">
+                  <span>{report.isNewSchool ? 'New / Prospect' : 'Existing school'}</span>
+                  <span>{report.programManagerName}</span>
+                  <span>{report.state}</span>
+                  <span>{report.schoolEmail || 'Email pending'}</span>
+                </div>
+
+                <div className="tracking-card-details">
+                  <div>
+                    <span>Sheet</span>
+                    <strong>{report.isNewSchool ? report.newSchoolSheetStatus || 'Pending' : 'NA'}</strong>
                   </div>
-                </td>
-              </tr>
-            ))}
-            {!reports.length && (
-              <tr>
-                <td colSpan="11">No reports found.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  <div>
+                    <span>Lead Stage</span>
+                    <strong>{report.salesLeadStatus || 'Not Required'}</strong>
+                  </div>
+                  <div>
+                    <span>Resends</span>
+                    <strong>{report.resendCount || 0}</strong>
+                  </div>
+                  <div>
+                    <span>Next Follow-up</span>
+                    <strong>
+                      {report.nextVisitDate ? new Date(report.nextVisitDate).toLocaleDateString('en-IN') : 'Not planned'}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Pending Actions</span>
+                    <strong>{pendingActions}</strong>
+                  </div>
+                </div>
+
+                <div className="tracking-card-actions">
+                  {isAdmin ? (
+                    <>
+                      <button type="button" className="table-action" onClick={() => setEditingReport(report)} disabled={loading}>
+                        Edit
+                      </button>
+                      <button type="button" className="table-action" onClick={() => resendReport(report._id)} disabled={loading}>
+                        Resend
+                      </button>
+                      {report.nextVisitDate && (
+                        <button type="button" className="table-action" onClick={() => sendReminder(report._id)} disabled={loading}>
+                          Remind
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button type="button" className="table-action" onClick={() => sendReminder(report._id)} disabled={loading}>
+                      Remind
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
       {timeline.length > 0 && (
         <div className="timeline-panel">
           <div className="panel-header compact">

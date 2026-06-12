@@ -449,6 +449,70 @@ body {
   margin-bottom: 16px;
 }
 
+.scheduler-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.scheduler-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 520px;
+}
+
+.scheduler-chip {
+  width: auto;
+  min-height: 34px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.scheduler-chip.active {
+  border-color: #c7e9f8;
+  background: #effaff;
+  color: var(--brand-dark);
+}
+
+.scheduler-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: auto;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.scheduler-toggle input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0;
+}
+
 .compact-stats {
   margin-bottom: 16px;
 }
@@ -456,6 +520,137 @@ body {
 .plan-list {
   display: grid;
   gap: 12px;
+}
+
+.tracking-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tracking-range-row {
+  display: flex;
+  align-items: center;
+}
+
+.tracking-range-row .scheduler-presets {
+  flex: 1 1 auto;
+}
+
+.tracking-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff, #f8fcfa);
+}
+
+.tracking-card-top,
+.tracking-card-meta,
+.tracking-card-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tracking-card-top {
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.tracking-card-top strong {
+  display: block;
+  color: #173723;
+}
+
+.tracking-card-top span,
+.tracking-card-meta span,
+.tracking-card-details span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tracking-card-meta {
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.tracking-card-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.tracking-card-details div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface-soft);
+}
+
+.tracking-card-details span,
+.tracking-card-details strong {
+  display: block;
+}
+
+.tracking-card-details strong {
+  margin-top: 4px;
+  color: #173723;
+}
+
+.tracking-card-actions {
+  flex-wrap: wrap;
+}
+
+.pm-plan-groups {
+  display: grid;
+  gap: 16px;
+}
+
+.pm-plan-group {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff, #f8fcfa);
+}
+
+.pm-plan-group-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pm-plan-group-head h3 {
+  margin: 4px 0;
+  color: #173723;
+}
+
+.pm-plan-group-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pm-plan-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pm-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.scheduler-more-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
 }
 
 .plan-card {
@@ -662,7 +857,10 @@ body {
   .preview-copy-grid,
   .dashboard-grid,
   .dashboard-grid.wide,
-  .action-edit-card {
+  .action-edit-card,
+  .pm-plan-grid,
+  .report-card-grid,
+  .report-card-filters {
     grid-template-columns: 1fr;
   }
 
@@ -1205,6 +1403,60 @@ tbody tr:last-child td {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
+}
+
+.report-card-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.report-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.report-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff, #f7fbf9);
+}
+
+.report-card-top,
+.report-card-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.report-card-top {
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.report-card-top strong {
+  display: block;
+  color: #173723;
+}
+
+.report-card-top span,
+.report-card-meta span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.report-card-meta {
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.report-card p {
+  margin: 0 0 12px;
+  color: #244032;
+  line-height: 1.55;
 }
 
 .compact-select {

@@ -1,3 +1,4 @@
+
 import nodemailer from "nodemailer";
 import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
@@ -7,6 +8,7 @@ import { env } from "../config/env.js";
 const serviceDir = dirname(fileURLToPath(import.meta.url));
 const logoPath = join(serviceDir, "../../assets/superteacher-logo.png");
 const SMTP_TIMEOUT_MS = 12000;
+const DEFAULT_FROM_NAME = "Super Teachers Edureforms Pvt Ltd";
 
 function createTransporter(port = env.smtp.port) {
   return nodemailer.createTransport({
@@ -93,6 +95,13 @@ async function parseAppsScriptResponse(response) {
   }
 }
 
+function getFromDetails() {
+  return {
+    name: env.smtp.fromName || DEFAULT_FROM_NAME,
+    address: env.smtp.fromEmail || env.smtp.user,
+  };
+}
+
 export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdfBuffer }) {
   const ccList = mergeEmailLists(replyTo, env.smtp.cc, cc);
   const logoBase64 = existsSync(logoPath) ? readFileSync(logoPath).toString("base64") : "";
@@ -115,6 +124,8 @@ export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdf
         cc: ccList.join(","),
         replyTo,
         subject,
+        fromName: getFromDetails().name,
+        fromEmail: getFromDetails().address,
         html,
         pdfBase64: pdfBuffer ? Buffer.from(pdfBuffer).toString("base64") : null,
         pdfFileName: "school-visit-report.pdf",
@@ -156,10 +167,7 @@ export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdf
   }
 
   return sendMailWithFallback({
-    from: {
-      name: env.smtp.fromName || "School Visit Reports",
-      address: env.smtp.fromEmail || env.smtp.user,
-    },
+    from: getFromDetails(),
     to,
     cc: ccList.length ? ccList : undefined,
     replyTo: replyTo || undefined,
@@ -222,6 +230,8 @@ export async function sendPlanNotificationEmail(plan) {
         cc,
         replyTo: plan.programManagerEmail,
         subject,
+        fromName: getFromDetails().name,
+        fromEmail: getFromDetails().address,
         html,
         pdfBase64: null,
         pdfFileName: null,
@@ -241,10 +251,7 @@ export async function sendPlanNotificationEmail(plan) {
   }
 
   return sendMailWithFallback({
-    from: {
-      name: env.smtp.fromName || "School Visit Planner",
-      address: env.smtp.fromEmail || env.smtp.user,
-    },
+    from: getFromDetails(),
     to,
     cc: cc || undefined,
     subject,
@@ -273,6 +280,8 @@ async function sendSimpleOperationalEmail({ to, cc, replyTo, subject, html }) {
         cc,
         replyTo,
         subject,
+        fromName: getFromDetails().name,
+        fromEmail: getFromDetails().address,
         html,
         pdfBase64: null,
         pdfFileName: null,
@@ -288,10 +297,7 @@ async function sendSimpleOperationalEmail({ to, cc, replyTo, subject, html }) {
   }
 
   return sendMailWithFallback({
-    from: {
-      name: env.smtp.fromName || "School Visit Planner",
-      address: env.smtp.fromEmail || env.smtp.user,
-    },
+    from: getFromDetails(),
     to,
     cc: cc || undefined,
     replyTo: replyTo || undefined,
@@ -313,6 +319,7 @@ export async function sendPlanReminderEmail(plan) {
   const dateLabel = plan.plannedDate ? new Date(plan.plannedDate).toLocaleDateString("en-IN") : "";
   const html = `
     <div style="font-family: Arial, sans-serif; color: #17202a; line-height: 1.6;">
+      <p>Dear <strong>${plan.programManagerName || "Program Manager"}</strong>,</p>
       <h2>Visit reminder</h2>
       <p>This is a reminder for an upcoming school visit plan.</p>
       <p><strong>School:</strong> ${plan.schoolName || ""}</p>
@@ -320,6 +327,7 @@ export async function sendPlanReminderEmail(plan) {
       <p><strong>Time:</strong> ${plan.plannedStartTime || "--"} to ${plan.plannedEndTime || "--"}</p>
       <p><strong>Purpose:</strong> ${plan.purposeOfVisit || ""}</p>
       <p><strong>Planned work:</strong> ${plan.workPlanned || ""}</p>
+      <p>Regards,<br><strong>Super Teachers Edureforms Pvt Ltd</strong></p>
     </div>
   `;
 
@@ -336,12 +344,14 @@ export async function sendFollowUpReminderEmail(report) {
   const nextVisitLabel = report.nextVisitDate ? new Date(report.nextVisitDate).toLocaleDateString("en-IN") : "Not scheduled";
   const html = `
     <div style="font-family: Arial, sans-serif; color: #17202a; line-height: 1.6;">
+      <p>Dear <strong>${report.programManagerName || "Program Manager"}</strong>,</p>
       <h2>Follow-up reminder</h2>
       <p>A follow-up is due for the report below.</p>
       <p><strong>School:</strong> ${report.schoolName || ""}</p>
       <p><strong>Program Manager:</strong> ${report.programManagerName || ""}</p>
       <p><strong>Next follow-up:</strong> ${nextVisitLabel}</p>
       <p><strong>Action items:</strong> ${report.actionItems || "No action items recorded."}</p>
+      <p>Regards,<br><strong>Super Teachers Edureforms Pvt Ltd</strong></p>
     </div>
   `;
 

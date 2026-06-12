@@ -4,6 +4,7 @@ export function buildReportHtml(data) {
   const nextVisitText = data.nextVisitDate
     ? formatDate(data.nextVisitDate)
     : "Will be shared separately based on mutual availability and requirement.";
+  const greetingName = buildGreetingName(data.pointOfContact);
 
   const photosText = data.photos?.length
     ? "Session photos have also been documented and included as part of the reporting process."
@@ -29,7 +30,7 @@ export function buildReportHtml(data) {
 
       <div style="padding:24px; font-size:14px; line-height:1.7;">
         <p style="margin-top:0;">
-          Dear <strong>${escapeHtml(data.pointOfContact || "School Team")}</strong>,
+          Dear <strong>${escapeHtml(greetingName)}</strong>,
         </p>
 
         <p>
@@ -84,18 +85,27 @@ export function buildReportHtml(data) {
         <p>${escapeHtml(content.closing)}</p>
 
         <p style="margin-bottom:0;">
-          Regards,<br>
+          Warm regards,<br>
           <strong>${escapeHtml(data.programManagerName)}</strong><br>
-          <span style="color:#5e7168;">SuperTeacher</span>
+          <span style="color:#5e7168;">Super Teachers Edureforms Pvt Ltd</span>
         </p>
       </div>
 
       <div style="padding:12px 24px; background:#f7fbf9; border-top:1px solid #d7e7df; color:#5e7168; font-size:12px;">
-        This is a system-generated visit communication from SuperTeacher.
+        This is a system-generated visit communication from Super Teachers Edureforms Pvt Ltd.
       </div>
     </div>
   </div>
   `;
+}
+
+function buildGreetingName(pointOfContact) {
+  const cleaned = String(pointOfContact || "")
+    .split("|")[0]
+    .replace(/\s*&\s*/g, " / ")
+    .trim();
+
+  return cleaned || "School Team";
 }
 
 function buildSnapshotRow(label, value) {

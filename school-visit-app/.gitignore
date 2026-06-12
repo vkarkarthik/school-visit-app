@@ -9,3 +9,4 @@ backend/generated/
 backend/.cache/
 dist
 frontend/dist/
+school-visit-app/

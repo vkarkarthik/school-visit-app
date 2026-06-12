@@ -2,6 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 
 const PLAN_STATUSES = ["Draft", "Confirmed", "Completed", "Cancelled"];
+const DEFAULT_VISIBLE_STATUSES = ["Draft", "Confirmed"];
+const DEFAULT_GROUP_VISIBLE_COUNT = 4;
+
+function formatDateInput(date) {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
 
 const emptyForm = (currentUser = {}) => ({
   state: "",
@@ -23,6 +35,9 @@ const emptyForm = (currentUser = {}) => ({
 });
 
 export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onConvertToReport }) {
+  const today = useMemo(() => new Date(), []);
+  const defaultFrom = useMemo(() => formatDateInput(today), [today]);
+  const defaultTo = useMemo(() => formatDateInput(addDays(today, 30)), [today]);
   const [form, setForm] = useState(() => emptyForm(currentUser));
   const [plans, setPlans] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -31,10 +46,17 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
   const [message, setMessage] = useState("");
   const [filters, setFilters] = useState({
     status: "",
-    dateFrom: "",
-    dateTo: "",
+    dateFrom: defaultFrom,
+    dateTo: defaultTo,
     programManagerEmail: "",
+    state: "",
+    purposeOfVisit: "",
+    search: "",
   });
+  const [rangePreset, setRangePreset] = useState("next30");
+  const [includeClosed, setIncludeClosed] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const [visibleCountByGroup, setVisibleCountByGroup] = useState({});
 
   const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
@@ -49,7 +71,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
 
   useEffect(() => {
     loadPlans();
-  }, [filters.status, filters.dateFrom, filters.dateTo, filters.programManagerEmail]);
+  }, [filters.status, filters.dateFrom, filters.dateTo, filters.programManagerEmail, filters.state, filters.purposeOfVisit, filters.search]);
 
   const filteredSchools = useMemo(
     () =>
@@ -148,6 +170,102 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
       setMessage(error.response?.data?.message || "Could not send reminder.");
     }
   }
+
+  function applyRangePreset(preset) {
+    const base = new Date();
+    let dateFrom = "";
+    let dateTo = "";
+
+    if (preset === "today") {
+      dateFrom = formatDateInput(base);
+      dateTo = formatDateInput(base);
+    }
+
+    if (preset === "week") {
+      dateFrom = formatDateInput(base);
+      dateTo = formatDateInput(addDays(base, 7));
+    }
+
+    if (preset === "month") {
+      dateFrom = formatDateInput(base);
+      dateTo = formatDateInput(addDays(base, 30));
+    }
+
+    if (preset === "next30") {
+      dateFrom = formatDateInput(base);
+      dateTo = formatDateInput(addDays(base, 30));
+    }
+
+    setRangePreset(preset);
+    setFilters((prev) => ({
+      ...prev,
+      dateFrom,
+      dateTo,
+    }));
+  }
+
+  function toggleGroup(groupKey) {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [groupKey]: !prev[groupKey],
+    }));
+  }
+
+  const groupedPlans = useMemo(() => {
+    const groups = new Map();
+
+    for (const plan of plans) {
+      if (!includeClosed && !DEFAULT_VISIBLE_STATUSES.includes(plan.status)) {
+        continue;
+      }
+
+      const key = plan.programManagerEmail || plan.programManagerName || "unknown";
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          managerName: plan.programManagerName || "Unknown PM",
+          managerEmail: plan.programManagerEmail || "",
+          plans: [],
+        });
+      }
+      groups.get(key).plans.push(plan);
+    }
+
+    return [...groups.values()]
+      .map((group) => ({
+        ...group,
+        plans: group.plans.sort((a, b) => new Date(a.plannedDate) - new Date(b.plannedDate)),
+      }))
+      .sort((a, b) => a.managerName.localeCompare(b.managerName));
+  }, [includeClosed, plans]);
+
+  const programManagerOptions = useMemo(() => {
+    const uniqueManagers = new Map();
+
+    for (const plan of plans) {
+      const email = plan.programManagerEmail || "";
+      const name = plan.programManagerName || email || "Unknown PM";
+      if (email && !uniqueManagers.has(email)) {
+        uniqueManagers.set(email, name);
+      }
+    }
+
+    return [...uniqueManagers.entries()]
+      .map(([email, name]) => ({ email, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [plans]);
+
+  useEffect(() => {
+    setExpandedGroups((prev) => {
+      const next = { ...prev };
+      for (const group of groupedPlans) {
+        if (!(group.key in next)) {
+          next[group.key] = true;
+        }
+      }
+      return next;
+    });
+  }, [groupedPlans]);
 
   return (
     <section className="scheduler-shell">
@@ -329,7 +447,45 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
           <span className="panel-badge">{plans.length} plans</span>
         </div>
 
+        <div className="scheduler-toolbar">
+          <div className="scheduler-presets">
+            {[
+              { id: "today", label: "Today" },
+              { id: "week", label: "Next 7 Days" },
+              { id: "next30", label: "Next 30 Days" },
+              { id: "all", label: "All Time" },
+            ].map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={`scheduler-chip ${rangePreset === preset.id ? "active" : ""}`}
+                onClick={() => applyRangePreset(preset.id)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+
+          <label className="scheduler-toggle">
+            <input
+              type="checkbox"
+              checked={includeClosed}
+              onChange={(e) => setIncludeClosed(e.target.checked)}
+            />
+            <span>Show completed and cancelled too</span>
+          </label>
+        </div>
+
         <div className="tracking-filter-grid scheduler-filters">
+          <label>
+            Search
+            <input
+              value={filters.search}
+              onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+              placeholder="School or city"
+            />
+          </label>
+
           <label>
             Status
             <select value={filters.status} onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}>
@@ -340,6 +496,27 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                 </option>
               ))}
             </select>
+          </label>
+
+          <label>
+            State
+            <select value={filters.state} onChange={(e) => setFilters((prev) => ({ ...prev, state: e.target.value }))}>
+              <option value="">All states</option>
+              {states.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Purpose
+            <input
+              value={filters.purposeOfVisit}
+              onChange={(e) => setFilters((prev) => ({ ...prev, purposeOfVisit: e.target.value }))}
+              placeholder="Training / Demo / Review"
+            />
           </label>
 
           <label>
@@ -362,12 +539,18 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
 
           {isAdmin && (
             <label>
-              PM Email
-              <input
+              Program Manager
+              <select
                 value={filters.programManagerEmail}
                 onChange={(e) => setFilters((prev) => ({ ...prev, programManagerEmail: e.target.value }))}
-                placeholder="name@superteacher.in"
-              />
+              >
+                <option value="">All PMs</option>
+                {programManagerOptions.map((manager) => (
+                  <option key={manager.email} value={manager.email}>
+                    {manager.name} ({manager.email})
+                  </option>
+                ))}
+              </select>
             </label>
           )}
         </div>
@@ -385,71 +568,117 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
 
         {loading ? (
           <div className="status-text">Loading plans...</div>
-        ) : !plans.length ? (
+        ) : !groupedPlans.length ? (
           <div className="empty-state">No plans found for the current filters.</div>
         ) : (
-          <div className="plan-list">
-            {plans.map((plan) => (
-              <article key={plan._id} className="plan-card">
-                <div className="plan-card-top">
+          <div className="pm-plan-groups">
+            {groupedPlans.map((group) => (
+              <section key={group.key} className="pm-plan-group">
+                <div className="pm-plan-group-head">
                   <div>
-                    <strong>{plan.schoolName}</strong>
-                    <span>
-                      {new Date(plan.plannedDate).toLocaleDateString("en-IN")} | {plan.purposeOfVisit}
-                    </span>
+                    <span className="eyebrow">Program Manager</span>
+                    <h3>{group.managerName}</h3>
+                    <p>{group.managerEmail || "Email not available"}</p>
                   </div>
-                  <span className={`status-pill ${getStatusTone(plan.status)}`}>{plan.status}</span>
-                </div>
-
-                <div className="plan-meta">
-                  <span>{plan.state}</span>
-                  <span>{plan.city || "City pending"}</span>
-                  <span>{plan.programManagerName}</span>
-                  <span>
-                    {plan.plannedStartTime || "--"} to {plan.plannedEndTime || "--"}
-                  </span>
-                </div>
-
-                <p>{plan.workPlanned}</p>
-
-                <div className="plan-footer">
-                  <div className="plan-status-stack">
-                    <span className="muted-text">
-                      Planner Sheet: {plan.plannerSheetStatus || "Pending"}
-                      {plan.plannerSheetError ? ` (${plan.plannerSheetError})` : ""}
-                    </span>
-                    <span className="muted-text">
-                      Notification: {plan.notificationStatus || "Not Required"}
-                      {plan.notificationError ? ` (${plan.notificationError})` : ""}
-                    </span>
-                    {plan.convertedReportId && <span className="muted-text">Converted to report</span>}
-                  </div>
-                  <div className="row-actions">
+                  <div className="pm-plan-group-actions">
+                    <span className="panel-badge">{group.plans.length} plans</span>
                     <button
                       type="button"
                       className="table-action"
-                      onClick={() => onConvertToReport?.(plan)}
-                      disabled={Boolean(plan.convertedReportId) || plan.status === "Cancelled"}
+                      onClick={() => toggleGroup(group.key)}
                     >
-                      {plan.convertedReportId ? "Converted" : "Convert to Report"}
+                      {expandedGroups[group.key] ? "Collapse" : "Expand"}
                     </button>
-                    <button type="button" className="table-action" onClick={() => sendReminder(plan._id)}>
-                      Remind
-                    </button>
-                    {PLAN_STATUSES.map((status) => (
-                      <button
-                        key={status}
-                        type="button"
-                        className="table-action"
-                        onClick={() => updateStatus(plan._id, status)}
-                        disabled={status === plan.status}
-                      >
-                        {status}
-                      </button>
-                    ))}
                   </div>
                 </div>
-              </article>
+
+                {expandedGroups[group.key] && (
+                  <div className="pm-plan-grid">
+                    {group.plans
+                      .slice(0, visibleCountByGroup[group.key] || DEFAULT_GROUP_VISIBLE_COUNT)
+                      .map((plan) => (
+                    <article key={plan._id} className="plan-card">
+                      <div className="plan-card-top">
+                        <div>
+                          <strong>{plan.schoolName}</strong>
+                          <span>
+                            {new Date(plan.plannedDate).toLocaleDateString("en-IN")} | {plan.purposeOfVisit}
+                          </span>
+                        </div>
+                        <span className={`status-pill ${getStatusTone(plan.status)}`}>{plan.status}</span>
+                      </div>
+
+                      <div className="plan-meta">
+                        <span>{plan.state}</span>
+                        <span>{plan.city || "City pending"}</span>
+                        <span>{plan.pointOfContact || "POC pending"}</span>
+                        <span>
+                          {plan.plannedStartTime || "--"} to {plan.plannedEndTime || "--"}
+                        </span>
+                      </div>
+
+                      <p>{plan.workPlanned}</p>
+
+                      <div className="plan-footer">
+                        <div className="plan-status-stack">
+                          <span className="muted-text">
+                            Planner Sheet: {plan.plannerSheetStatus || "Pending"}
+                            {plan.plannerSheetError ? ` (${plan.plannerSheetError})` : ""}
+                          </span>
+                          <span className="muted-text">
+                            Notification: {plan.notificationStatus || "Not Required"}
+                            {plan.notificationError ? ` (${plan.notificationError})` : ""}
+                          </span>
+                          {plan.convertedReportId && <span className="muted-text">Converted to report</span>}
+                        </div>
+                        <div className="row-actions">
+                          <button
+                            type="button"
+                            className="table-action"
+                            onClick={() => onConvertToReport?.(plan)}
+                            disabled={Boolean(plan.convertedReportId) || plan.status === "Cancelled"}
+                          >
+                            {plan.convertedReportId ? "Converted" : "Convert to Report"}
+                          </button>
+                          <button type="button" className="table-action" onClick={() => sendReminder(plan._id)}>
+                            Remind
+                          </button>
+                          {PLAN_STATUSES.map((status) => (
+                            <button
+                              key={status}
+                              type="button"
+                              className="table-action"
+                              onClick={() => updateStatus(plan._id, status)}
+                              disabled={status === plan.status}
+                            >
+                              {status}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </article>
+                    ))}
+                  </div>
+                )}
+
+                {expandedGroups[group.key] &&
+                  group.plans.length > (visibleCountByGroup[group.key] || DEFAULT_GROUP_VISIBLE_COUNT) && (
+                    <div className="scheduler-more-row">
+                      <button
+                        type="button"
+                        className="table-action"
+                        onClick={() =>
+                          setVisibleCountByGroup((prev) => ({
+                            ...prev,
+                            [group.key]: (prev[group.key] || DEFAULT_GROUP_VISIBLE_COUNT) + DEFAULT_GROUP_VISIBLE_COUNT,
+                          }))
+                        }
+                      >
+                        Show more plans
+                      </button>
+                    </div>
+                  )}
+              </section>
             ))}
           </div>
         )}
