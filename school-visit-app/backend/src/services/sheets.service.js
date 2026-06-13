@@ -41,6 +41,10 @@ const PLANNER_LOG_HEADERS = [
   "Course / Requirement",
   "Planning Notes",
 ];
+const LEGACY_PLANNER_DASHBOARD_SHEET = "Dashboard";
+const PLANNER_DASHBOARD_SHEET = "Planner Ops Dashboard";
+const MANAGEMENT_DASHBOARD_SHEET = "Management Dashboard";
+const PLANNER_DASHBOARD_HELPER_SHEET = "_Planner_Dashboard_Data";
 
 function normalizeHeader(header) {
   return String(header || "").trim().toLowerCase();
@@ -342,6 +346,799 @@ async function ensureSheetWithHeadersInSpreadsheet(spreadsheetId, sheetName, hea
   }
 }
 
+async function getSpreadsheetSheets(spreadsheetId) {
+  const spreadsheet = await sheetsClient.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets.properties.sheetId,sheets.properties.title,sheets.properties.hidden",
+  });
+
+  return spreadsheet.data.sheets || [];
+}
+
+async function ensureSheetInSpreadsheet(spreadsheetId, sheetName, hidden = false) {
+  const sheets = await getSpreadsheetSheets(spreadsheetId);
+  const existing = sheets.find((sheet) => sheet.properties?.title === sheetName);
+
+  if (existing) {
+    return existing.properties;
+  }
+
+  const response = await sheetsClient.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          addSheet: {
+            properties: {
+              title: sheetName,
+              hidden,
+            },
+          },
+        },
+      ],
+    },
+  });
+
+  return response.data.replies?.[0]?.addSheet?.properties;
+}
+
+async function renameSheetIfNeeded(spreadsheetId, oldTitle, newTitle) {
+  const sheets = await getSpreadsheetSheets(spreadsheetId);
+  const oldSheet = sheets.find((sheet) => sheet.properties?.title === oldTitle);
+  const newSheet = sheets.find((sheet) => sheet.properties?.title === newTitle);
+
+  if (!oldSheet || newSheet) {
+    return newSheet?.properties || oldSheet?.properties;
+  }
+
+  await sheetsClient.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId: oldSheet.properties.sheetId,
+              title: newTitle,
+            },
+            fields: "title",
+          },
+        },
+      ],
+    },
+  });
+
+  return {
+    ...oldSheet.properties,
+    title: newTitle,
+  };
+}
+
+async function recreateSheetInSpreadsheet(spreadsheetId, sheetName, hidden = false) {
+  const sheets = await getSpreadsheetSheets(spreadsheetId);
+  const existing = sheets.find((sheet) => sheet.properties?.title === sheetName);
+
+  if (existing?.properties?.sheetId) {
+    await sheetsClient.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            deleteSheet: {
+              sheetId: existing.properties.sheetId,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  return ensureSheetInSpreadsheet(spreadsheetId, sheetName, hidden);
+}
+
+function buildPlannerAggregateFormula(pmSheetTitles = []) {
+  const escapedHeaders = PLANNER_LOG_HEADERS.map((header) => `"${String(header).replace(/"/g, '""')}"`).join(",");
+
+  if (!pmSheetTitles.length) {
+    return `={${escapedHeaders}}`;
+  }
+
+  const sheetRanges = pmSheetTitles.map((title) => `'${title.replace(/'/g, "''")}'!A2:S`).join(";");
+  return `={${escapedHeaders};QUERY({${sheetRanges}},"select * where Col1 is not null",0)}`;
+}
+
+function buildPlannerDateFormula() {
+  return `={"Parsed Planned Date";ARRAYFORMULA(IF(L2:L="",,DATE(VALUE(INDEX(SPLIT(L2:L,"/"),,3)),VALUE(INDEX(SPLIT(L2:L,"/"),,2)),VALUE(INDEX(SPLIT(L2:L,"/"),,1)))))}`;
+}
+
+function buildDashboardFilteredFormula() {
+  return `=IFERROR(FILTER('${PLANNER_DASHBOARD_HELPER_SHEET}'!A2:T,IF($B$4="All",TRUE,'${PLANNER_DASHBOARD_HELPER_SHEET}'!D2:D=$B$4),IF($D$4="All",TRUE,'${PLANNER_DASHBOARD_HELPER_SHEET}'!E2:E=$D$4),IF($F$4="All",TRUE,'${PLANNER_DASHBOARD_HELPER_SHEET}'!H2:H=$F$4),IF($H$4="Today",'${PLANNER_DASHBOARD_HELPER_SHEET}'!T2:T=TODAY(),IF($H$4="Next 7 Days",('${PLANNER_DASHBOARD_HELPER_SHEET}'!T2:T>=TODAY())*('${PLANNER_DASHBOARD_HELPER_SHEET}'!T2:T<=TODAY()+7),IF($H$4="Next 30 Days",('${PLANNER_DASHBOARD_HELPER_SHEET}'!T2:T>=TODAY())*('${PLANNER_DASHBOARD_HELPER_SHEET}'!T2:T<=TODAY()+30),TRUE)))),"")`;
+}
+
+function buildUniquePmFormula() {
+  return `={"All";SORT(UNIQUE(FILTER('${PLANNER_DASHBOARD_HELPER_SHEET}'!E2:E,'${PLANNER_DASHBOARD_HELPER_SHEET}'!E2:E<>"')))}`;
+}
+
+function buildUniqueStateFormula() {
+  return `={"All";SORT(UNIQUE(FILTER('${PLANNER_DASHBOARD_HELPER_SHEET}'!H2:H,'${PLANNER_DASHBOARD_HELPER_SHEET}'!H2:H<>"')))}`;
+}
+
+function buildChartRequest({ sheetId, title, chartType = "COLUMN", domainStartRow, domainEndRow, domainColumn, seriesColumn, anchorRow, anchorColumn, width = 420, height = 240 }) {
+  return {
+    addChart: {
+      chart: {
+        spec: {
+          title,
+          basicChart: {
+            chartType,
+            legendPosition: "NO_LEGEND",
+            headerCount: 1,
+            axis: [
+              { position: "BOTTOM_AXIS", title: title },
+              { position: "LEFT_AXIS", title: "Count" },
+            ],
+            domains: [
+              {
+                domain: {
+                  sourceRange: {
+                    sources: [
+                      {
+                        sheetId,
+                        startRowIndex: domainStartRow,
+                        endRowIndex: domainEndRow,
+                        startColumnIndex: domainColumn,
+                        endColumnIndex: domainColumn + 1,
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+            series: [
+              {
+                series: {
+                  sourceRange: {
+                    sources: [
+                      {
+                        sheetId,
+                        startRowIndex: domainStartRow,
+                        endRowIndex: domainEndRow,
+                        startColumnIndex: seriesColumn,
+                        endColumnIndex: seriesColumn + 1,
+                      },
+                    ],
+                  },
+                },
+                dataLabel: {
+                  type: "DATA",
+                },
+              },
+            ],
+          },
+        },
+        position: {
+          overlayPosition: {
+            anchorCell: {
+              sheetId,
+              rowIndex: anchorRow,
+              columnIndex: anchorColumn,
+            },
+            widthPixels: width,
+            heightPixels: height,
+          },
+        },
+      },
+    },
+  };
+}
+
+function buildSlicerRequest({ sheetId, title, dataStartRow = 9, dataEndRow = 1000, dataStartColumn = 23, dataEndColumn = 43, columnIndex, rowIndex, columnAnchor }) {
+  return {
+    addSlicer: {
+      slicer: {
+        spec: {
+          title,
+          columnIndex: dataStartColumn + columnIndex,
+          dataRange: {
+            sheetId,
+            startRowIndex: dataStartRow,
+            endRowIndex: dataEndRow,
+            startColumnIndex: dataStartColumn,
+            endColumnIndex: dataEndColumn,
+          },
+          applyToPivotTables: false,
+          horizontalAlignment: "LEFT",
+          textFormat: {
+            bold: true,
+            fontSize: 10,
+          },
+        },
+        position: {
+          overlayPosition: {
+            anchorCell: {
+              sheetId,
+              rowIndex,
+              columnIndex: columnAnchor,
+            },
+            widthPixels: 160,
+            heightPixels: 80,
+          },
+        },
+      },
+    },
+  };
+}
+
+export async function buildPlannerDashboardSheet() {
+  const spreadsheetId = env.plannerSpreadsheetId;
+  await renameSheetIfNeeded(spreadsheetId, LEGACY_PLANNER_DASHBOARD_SHEET, PLANNER_DASHBOARD_SHEET);
+  const sheets = await getSpreadsheetSheets(spreadsheetId);
+  const pmSheets = sheets
+    .map((sheet) => sheet.properties?.title)
+    .filter((title) => String(title || "").startsWith("PM - "));
+
+  await recreateSheetInSpreadsheet(spreadsheetId, PLANNER_DASHBOARD_HELPER_SHEET, true);
+  const dashboardProps = await ensureSheetInSpreadsheet(spreadsheetId, PLANNER_DASHBOARD_SHEET, false);
+  const managementProps = await recreateSheetInSpreadsheet(spreadsheetId, MANAGEMENT_DASHBOARD_SHEET, false);
+
+  await sheetsClient.spreadsheets.values.clear({
+    spreadsheetId,
+    range: `'${PLANNER_DASHBOARD_HELPER_SHEET}'!A:Z`,
+  });
+
+  await sheetsClient.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${PLANNER_DASHBOARD_HELPER_SHEET}'!A1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[buildPlannerAggregateFormula(pmSheets)]],
+    },
+  });
+
+  await sheetsClient.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${PLANNER_DASHBOARD_HELPER_SHEET}'!T1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[buildPlannerDateFormula()]],
+    },
+  });
+
+  await sheetsClient.spreadsheets.values.clear({
+    spreadsheetId,
+    range: `'${PLANNER_DASHBOARD_SHEET}'!A:Z`,
+  });
+
+  await sheetsClient.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId: dashboardProps.sheetId,
+              gridProperties: {
+                rowCount: 1000,
+                columnCount: 50,
+              },
+            },
+            fields: "gridProperties.rowCount,gridProperties.columnCount",
+          },
+        },
+      ],
+    },
+  });
+
+  await sheetsClient.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${PLANNER_DASHBOARD_SHEET}'!A1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [
+        ["Planner Ops Dashboard"],
+        ["Operational planner view built from PM planning sheets"],
+        [],
+        ["Status", "All", "Program Manager", "All", "State", "All", "Time Window", "Next 7 Days"],
+        [],
+        ["Total Plans", '=IFERROR(COUNTA(X11:X),0)', "Draft", '=COUNTIF(AA11:AA,"Draft")', "Confirmed", '=COUNTIF(AA11:AA,"Confirmed")', "Completed", '=COUNTIF(AA11:AA,"Completed")'],
+        ["Cancelled", '=COUNTIF(AA11:AA,"Cancelled")', "Today", '=COUNTIFS(AQ11:AQ,TODAY())', "Next 7 Days", '=COUNTIFS(AQ11:AQ,">="&TODAY(),AQ11:AQ,"<="&TODAY()+7)', "Needs Attention", '=IFERROR(COUNT(FILTER(AQ11:AQ,(AQ11:AQ<TODAY())*((AA11:AA="Draft")+(AA11:AA="Confirmed")))),0)'],
+        [],
+        ["Upcoming Visits"],
+        ["Date","School","PM","State","Purpose","Status","Time"],
+        ["=IFERROR(QUERY({AQ11:AQ,AD11:AD,AB11:AB,AE11:AE,AG11:AG,AA11:AA,AJ11:AJ&\" - \"&AK11:AK},\"select Col1,Col2,Col3,Col4,Col5,Col6,Col7 where Col1 is not null order by Col1 asc label Col1 'Date',Col2 'School',Col3 'PM',Col4 'State',Col5 'Purpose',Col6 'Status',Col7 'Time'\",0),\"\")"],
+        [],
+        ["Attention Items"],
+        ["Date","School","PM","Status","Work Planned"],
+        ["=IFERROR(QUERY({AQ11:AQ,AD11:AD,AB11:AB,AA11:AA,AH11:AH},\"select Col1,Col2,Col3,Col4,Col5 where Col1 < date '\"&TEXT(TODAY(),\"yyyy-mm-dd\")&\"' and (Col4 = 'Draft' or Col4 = 'Confirmed') order by Col1 asc label Col1 'Date',Col2 'School',Col3 'PM',Col4 'Status',Col5 'Work Planned'\",0),\"\")"],
+        [],
+        ["Planner Load by PM", "", "", "", "Planner Load by State", "", "", ""],
+        ["=IFERROR(QUERY(AB11:AB,\"select AB, count(AB) where AB is not null group by AB order by count(AB) desc label AB 'PM', count(AB) 'Plans'\",0),\"\")"],
+        [],
+        ["", "", "", "", "", "", "", ""],
+        ["=IFERROR(QUERY(AE11:AE,\"select AE, count(AE) where AE is not null group by AE order by count(AE) desc label AE 'State', count(AE) 'Plans'\",0),\"\")"],
+        [],
+        ["Status Mix", "", "", "", "Purpose Mix", "", "", ""],
+        ["=IFERROR(QUERY(AA11:AA,\"select AA, count(AA) where AA is not null group by AA order by count(AA) desc label AA 'Status', count(AA) 'Plans'\",0),\"\")"],
+        [],
+        ["", "", "", "", "", "", "", ""],
+        ["=IFERROR(QUERY(AG11:AG,\"select AG, count(AG) where AG is not null group by AG order by count(AG) desc label AG 'Purpose', count(AG) 'Plans'\",0),\"\")"],
+      ],
+    },
+  });
+
+  await sheetsClient.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${PLANNER_DASHBOARD_SHEET}'!AS1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [
+        ["PM List", "State List", "Status List", "Time Window List"],
+        [buildUniquePmFormula(), buildUniqueStateFormula(), '={"All";"Draft";"Confirmed";"Completed";"Cancelled"}', '={"Today";"Next 7 Days";"Next 30 Days";"All Time"}'],
+      ],
+    },
+  });
+
+  await sheetsClient.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${PLANNER_DASHBOARD_SHEET}'!X10`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [
+        ["Logged At","Action","Plan ID","Status","Program Manager","Program Manager Email","School Name","State","City","Purpose of Visit","Work Planned","Planned Date","Start Time","End Time","Point of Contact","Contact Number","School Email","Course / Requirement","Planning Notes","Parsed Planned Date"],
+        [buildDashboardFilteredFormula()],
+      ],
+    },
+  });
+
+  await sheetsClient.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId: dashboardProps.sheetId,
+              gridProperties: {
+                frozenRowCount: 4,
+                frozenColumnCount: 0,
+                hideGridlines: true,
+              },
+            },
+            fields: "gridProperties.frozenRowCount,gridProperties.frozenColumnCount,gridProperties.hideGridlines",
+          },
+        },
+        {
+          mergeCells: {
+            range: {
+              sheetId: dashboardProps.sheetId,
+              startRowIndex: 0,
+              endRowIndex: 1,
+              startColumnIndex: 0,
+              endColumnIndex: 8,
+            },
+            mergeType: "MERGE_ALL",
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId: dashboardProps.sheetId,
+              startRowIndex: 0,
+              endRowIndex: 2,
+              startColumnIndex: 0,
+              endColumnIndex: 8,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.92, green: 0.97, blue: 0.95 },
+                textFormat: { fontSize: 18, bold: true, foregroundColor: { red: 0.09, green: 0.22, blue: 0.14 } },
+                horizontalAlignment: "LEFT",
+                verticalAlignment: "MIDDLE",
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)",
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId: dashboardProps.sheetId,
+              startRowIndex: 3,
+              endRowIndex: 4,
+              startColumnIndex: 0,
+              endColumnIndex: 8,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.97, green: 0.99, blue: 0.98 },
+                textFormat: { bold: true, foregroundColor: { red: 0.13, green: 0.22, blue: 0.18 } },
+                horizontalAlignment: "CENTER",
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId: dashboardProps.sheetId,
+              startRowIndex: 5,
+              endRowIndex: 7,
+              startColumnIndex: 0,
+              endColumnIndex: 8,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 1, green: 1, blue: 1 },
+                horizontalAlignment: "CENTER",
+                verticalAlignment: "MIDDLE",
+                textFormat: { bold: true, fontSize: 13 },
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,textFormat)",
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId: dashboardProps.sheetId,
+              startRowIndex: 9,
+              endRowIndex: 10,
+              startColumnIndex: 0,
+              endColumnIndex: 7,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.92, green: 0.96, blue: 1 },
+                textFormat: { bold: true },
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,textFormat)",
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId: dashboardProps.sheetId,
+              startRowIndex: 13,
+              endRowIndex: 14,
+              startColumnIndex: 0,
+              endColumnIndex: 6,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 1, green: 0.95, blue: 0.9 },
+                textFormat: { bold: true },
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,textFormat)",
+          },
+        },
+        {
+          setDataValidation: {
+            range: {
+              sheetId: dashboardProps.sheetId,
+              startRowIndex: 3,
+              endRowIndex: 4,
+              startColumnIndex: 1,
+              endColumnIndex: 2,
+            },
+            rule: {
+              condition: {
+                type: "ONE_OF_RANGE",
+                values: [{ userEnteredValue: `='${PLANNER_DASHBOARD_SHEET}'!AU2:AU` }],
+              },
+              strict: true,
+              showCustomUi: true,
+            },
+          },
+        },
+        {
+          setDataValidation: {
+            range: {
+              sheetId: dashboardProps.sheetId,
+              startRowIndex: 3,
+              endRowIndex: 4,
+              startColumnIndex: 3,
+              endColumnIndex: 4,
+            },
+            rule: {
+              condition: {
+                type: "ONE_OF_RANGE",
+                values: [{ userEnteredValue: `='${PLANNER_DASHBOARD_SHEET}'!AS2:AS` }],
+              },
+              strict: true,
+              showCustomUi: true,
+            },
+          },
+        },
+        {
+          setDataValidation: {
+            range: {
+              sheetId: dashboardProps.sheetId,
+              startRowIndex: 3,
+              endRowIndex: 4,
+              startColumnIndex: 5,
+              endColumnIndex: 6,
+            },
+            rule: {
+              condition: {
+                type: "ONE_OF_RANGE",
+                values: [{ userEnteredValue: `='${PLANNER_DASHBOARD_SHEET}'!AT2:AT` }],
+              },
+              strict: true,
+              showCustomUi: true,
+            },
+          },
+        },
+        {
+          setDataValidation: {
+            range: {
+              sheetId: dashboardProps.sheetId,
+              startRowIndex: 3,
+              endRowIndex: 4,
+              startColumnIndex: 7,
+              endColumnIndex: 8,
+            },
+            rule: {
+              condition: {
+                type: "ONE_OF_RANGE",
+                values: [{ userEnteredValue: `='${PLANNER_DASHBOARD_SHEET}'!AV2:AV` }],
+              },
+              strict: true,
+              showCustomUi: true,
+            },
+          },
+        },
+        {
+          updateDimensionProperties: {
+            range: {
+              sheetId: dashboardProps.sheetId,
+              dimension: "COLUMNS",
+              startIndex: 18,
+              endIndex: 49,
+            },
+            properties: {
+              hiddenByUser: true,
+            },
+            fields: "hiddenByUser",
+          },
+        },
+      ],
+    },
+  });
+
+  await sheetsClient.spreadsheets.values.clear({
+    spreadsheetId,
+    range: `'${MANAGEMENT_DASHBOARD_SHEET}'!A:AZ`,
+  });
+
+  await sheetsClient.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId: managementProps.sheetId,
+              gridProperties: {
+                rowCount: 1000,
+                columnCount: 52,
+                frozenRowCount: 4,
+                frozenColumnCount: 0,
+                hideGridlines: true,
+              },
+            },
+            fields: "gridProperties.rowCount,gridProperties.columnCount,gridProperties.frozenRowCount,gridProperties.frozenColumnCount,gridProperties.hideGridlines",
+          },
+        },
+      ],
+    },
+  });
+
+  await sheetsClient.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${MANAGEMENT_DASHBOARD_SHEET}'!A1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [
+        ["Management Dashboard"],
+        ["Executive view of planner performance, risks, and upcoming field activity"],
+        [],
+        ["Status", "All", "Program Manager", "All", "State", "All", "Time Window", "Next 30 Days"],
+        [],
+        ["Total Plans", '=IFERROR(COUNTA(X11:X),0)', "Confirmed", '=COUNTIF(AA11:AA,"Confirmed")', "Next 7 Days", '=COUNTIFS(AQ11:AQ,">="&TODAY(),AQ11:AQ,"<="&TODAY()+7)', "Needs Attention", '=IFERROR(COUNT(FILTER(AQ11:AQ,(AQ11:AQ<TODAY())*((AA11:AA="Draft")+(AA11:AA="Confirmed")))),0)'],
+        ["Draft", '=COUNTIF(AA11:AA,"Draft")', "Completed", '=COUNTIF(AA11:AA,"Completed")', "Cancelled", '=COUNTIF(AA11:AA,"Cancelled")', "Today", '=COUNTIFS(AQ11:AQ,TODAY())'],
+        [],
+        ["High-Risk / Attention Items"],
+        ["Date","School","PM","Status","Work Planned"],
+        ["=IFERROR(QUERY({AQ11:AQ,AD11:AD,AB11:AB,AA11:AA,AH11:AH},\"select Col1,Col2,Col3,Col4,Col5 where Col1 < date '\"&TEXT(TODAY(),\"yyyy-mm-dd\")&\"' and (Col4 = 'Draft' or Col4 = 'Confirmed') order by Col1 asc label Col1 'Date',Col2 'School',Col3 'PM',Col4 'Status',Col5 'Work Planned'\",0),\"\")"],
+        [],
+        ["Upcoming Visits"],
+        ["Date","School","PM","State","Purpose","Status","Time"],
+        ["=IFERROR(QUERY({AQ11:AQ,AD11:AD,AB11:AB,AE11:AE,AG11:AG,AA11:AA,AJ11:AJ&\" - \"&AK11:AK},\"select Col1,Col2,Col3,Col4,Col5,Col6,Col7 where Col1 is not null order by Col1 asc label Col1 'Date',Col2 'School',Col3 'PM',Col4 'State',Col5 'Purpose',Col6 'Status',Col7 'Time'\",0),\"\")"],
+        [],
+        ["Status Mix", "", "", "PM Load", "", "", "State Load", "", "", "Purpose Mix"],
+        ["=IFERROR(QUERY(AA11:AA,\"select AA, count(AA) where AA is not null group by AA order by count(AA) desc label AA 'Status', count(AA) 'Plans'\",0),\"\")","","","=IFERROR(QUERY(AB11:AB,\"select AB, count(AB) where AB is not null group by AB order by count(AB) desc label AB 'PM', count(AB) 'Plans'\",0),\"\")","","","=IFERROR(QUERY(AE11:AE,\"select AE, count(AE) where AE is not null group by AE order by count(AE) desc label AE 'State', count(AE) 'Plans'\",0),\"\")","","","=IFERROR(QUERY(AG11:AG,\"select AG, count(AG) where AG is not null group by AG order by count(AG) desc label AG 'Purpose', count(AG) 'Plans'\",0),\"\")"],
+      ],
+    },
+  });
+
+  await sheetsClient.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${MANAGEMENT_DASHBOARD_SHEET}'!AS1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [
+        ["PM List", "State List", "Status List", "Time Window List"],
+        [buildUniquePmFormula(), buildUniqueStateFormula(), '={"All";"Draft";"Confirmed";"Completed";"Cancelled"}', '={"Today";"Next 7 Days";"Next 30 Days";"All Time"}'],
+      ],
+    },
+  });
+
+  await sheetsClient.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${MANAGEMENT_DASHBOARD_SHEET}'!X10`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [
+        ["Logged At","Action","Plan ID","Status","Program Manager","Program Manager Email","School Name","State","City","Purpose of Visit","Work Planned","Planned Date","Start Time","End Time","Point of Contact","Contact Number","School Email","Course / Requirement","Planning Notes","Parsed Planned Date"],
+        [buildDashboardFilteredFormula()],
+      ],
+    },
+  });
+
+  await sheetsClient.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          mergeCells: {
+            range: {
+              sheetId: managementProps.sheetId,
+              startRowIndex: 0,
+              endRowIndex: 1,
+              startColumnIndex: 0,
+              endColumnIndex: 10,
+            },
+            mergeType: "MERGE_ALL",
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId: managementProps.sheetId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 10 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.91, green: 0.96, blue: 0.92 },
+                textFormat: { fontSize: 20, bold: true, foregroundColor: { red: 0.09, green: 0.22, blue: 0.14 } },
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,textFormat)",
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId: managementProps.sheetId, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 0, endColumnIndex: 8 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.97, green: 0.99, blue: 0.98 },
+                textFormat: { bold: true },
+                horizontalAlignment: "CENTER",
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId: managementProps.sheetId, startRowIndex: 5, endRowIndex: 7, startColumnIndex: 0, endColumnIndex: 8 },
+            cell: {
+              userEnteredFormat: {
+                horizontalAlignment: "CENTER",
+                textFormat: { bold: true, fontSize: 13 },
+              },
+            },
+            fields: "userEnteredFormat(horizontalAlignment,textFormat)",
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId: managementProps.sheetId, startRowIndex: 9, endRowIndex: 10, startColumnIndex: 0, endColumnIndex: 5 },
+            cell: { userEnteredFormat: { backgroundColor: { red: 1, green: 0.93, blue: 0.93 }, textFormat: { bold: true } } },
+            fields: "userEnteredFormat(backgroundColor,textFormat)",
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId: managementProps.sheetId, startRowIndex: 13, endRowIndex: 14, startColumnIndex: 0, endColumnIndex: 7 },
+            cell: { userEnteredFormat: { backgroundColor: { red: 0.92, green: 0.96, blue: 1 }, textFormat: { bold: true } } },
+            fields: "userEnteredFormat(backgroundColor,textFormat)",
+          },
+        },
+        {
+          addConditionalFormatRule: {
+            index: 0,
+            rule: {
+              ranges: [{ sheetId: managementProps.sheetId, startRowIndex: 10, endRowIndex: 40, startColumnIndex: 0, endColumnIndex: 5 }],
+              booleanRule: {
+                condition: { type: "CUSTOM_FORMULA", values: [{ userEnteredValue: '=AND($A11<>"",$A11<TODAY())' }] },
+                format: {
+                  backgroundColor: { red: 1, green: 0.92, blue: 0.92 },
+                  textFormat: { bold: true, foregroundColor: { red: 0.6, green: 0.1, blue: 0.1 } },
+                },
+              },
+            },
+          },
+        },
+        {
+          addConditionalFormatRule: {
+            index: 0,
+            rule: {
+              ranges: [{ sheetId: managementProps.sheetId, startRowIndex: 5, endRowIndex: 7, startColumnIndex: 6, endColumnIndex: 8 }],
+              booleanRule: {
+                condition: { type: "NUMBER_GREATER", values: [{ userEnteredValue: "0" }] },
+                format: {
+                  backgroundColor: { red: 1, green: 0.88, blue: 0.88 },
+                  textFormat: { bold: true, foregroundColor: { red: 0.6, green: 0.1, blue: 0.1 } },
+                },
+              },
+            },
+          },
+        },
+        {
+          setDataValidation: {
+            range: { sheetId: managementProps.sheetId, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 1, endColumnIndex: 2 },
+            rule: { condition: { type: "ONE_OF_RANGE", values: [{ userEnteredValue: `='${MANAGEMENT_DASHBOARD_SHEET}'!AU2:AU` }] }, strict: true, showCustomUi: true },
+          },
+        },
+        {
+          setDataValidation: {
+            range: { sheetId: managementProps.sheetId, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 3, endColumnIndex: 4 },
+            rule: { condition: { type: "ONE_OF_RANGE", values: [{ userEnteredValue: `='${MANAGEMENT_DASHBOARD_SHEET}'!AS2:AS` }] }, strict: true, showCustomUi: true },
+          },
+        },
+        {
+          setDataValidation: {
+            range: { sheetId: managementProps.sheetId, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 5, endColumnIndex: 6 },
+            rule: { condition: { type: "ONE_OF_RANGE", values: [{ userEnteredValue: `='${MANAGEMENT_DASHBOARD_SHEET}'!AT2:AT` }] }, strict: true, showCustomUi: true },
+          },
+        },
+        {
+          setDataValidation: {
+            range: { sheetId: managementProps.sheetId, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 7, endColumnIndex: 8 },
+            rule: { condition: { type: "ONE_OF_RANGE", values: [{ userEnteredValue: `='${MANAGEMENT_DASHBOARD_SHEET}'!AV2:AV` }] }, strict: true, showCustomUi: true },
+          },
+        },
+        buildChartRequest({ sheetId: managementProps.sheetId, title: "Status Mix", chartType: "COLUMN", domainStartRow: 16, domainEndRow: 22, domainColumn: 0, seriesColumn: 1, anchorRow: 1, anchorColumn: 10, width: 360, height: 220 }),
+        buildChartRequest({ sheetId: managementProps.sheetId, title: "PM Load", chartType: "BAR", domainStartRow: 16, domainEndRow: 26, domainColumn: 3, seriesColumn: 4, anchorRow: 1, anchorColumn: 16, width: 420, height: 240 }),
+        buildChartRequest({ sheetId: managementProps.sheetId, title: "State Load", chartType: "COLUMN", domainStartRow: 16, domainEndRow: 26, domainColumn: 6, seriesColumn: 7, anchorRow: 14, anchorColumn: 10, width: 360, height: 220 }),
+        buildChartRequest({ sheetId: managementProps.sheetId, title: "Purpose Mix", chartType: "BAR", domainStartRow: 16, domainEndRow: 28, domainColumn: 9, seriesColumn: 10, anchorRow: 14, anchorColumn: 16, width: 420, height: 240 }),
+        buildSlicerRequest({ sheetId: managementProps.sheetId, title: "Status Slicer", columnIndex: 3, rowIndex: 27, columnAnchor: 0 }),
+        buildSlicerRequest({ sheetId: managementProps.sheetId, title: "PM Slicer", columnIndex: 4, rowIndex: 27, columnAnchor: 3 }),
+        buildSlicerRequest({ sheetId: managementProps.sheetId, title: "State Slicer", columnIndex: 7, rowIndex: 27, columnAnchor: 6 }),
+        {
+          updateDimensionProperties: {
+            range: { sheetId: managementProps.sheetId, dimension: "COLUMNS", startIndex: 23, endIndex: 49 },
+            properties: { hiddenByUser: true },
+            fields: "hiddenByUser",
+          },
+        },
+      ],
+    },
+  });
+
+  return {
+    spreadsheetId,
+    dashboardSheetName: PLANNER_DASHBOARD_SHEET,
+    managementSheetName: MANAGEMENT_DASHBOARD_SHEET,
+    helperSheetName: PLANNER_DASHBOARD_HELPER_SHEET,
+    pmSheetCount: pmSheets.length,
+    url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${managementProps.sheetId}`,
+    plannerOpsUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${dashboardProps.sheetId}`,
+    managementUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${managementProps.sheetId}`,
+  };
+}
+
 function buildPlannerSheetTabName(plan) {
   const baseName =
     String(plan.programManagerEmail || "").split("@")[0] ||
@@ -395,6 +1192,13 @@ export async function appendPlanLogToSheet(plan, action = "Created") {
 
   await ensureSheetWithHeadersInSpreadsheet(
     plannerSpreadsheetId,
+    env.plannerLogSheetName,
+    PLANNER_LOG_HEADERS,
+    `'${env.plannerLogSheetName}'!A1:S1`
+  );
+
+  await ensureSheetWithHeadersInSpreadsheet(
+    plannerSpreadsheetId,
     plannerTabName,
     PLANNER_LOG_HEADERS,
     `'${plannerTabName}'!A1:S1`
@@ -425,6 +1229,16 @@ export async function appendPlanLogToSheet(plan, action = "Created") {
   await sheetsClient.spreadsheets.values.append({
     spreadsheetId: plannerSpreadsheetId,
     range: `'${plannerTabName}'!A:S`,
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {
+      values: [row],
+    },
+  });
+
+  await sheetsClient.spreadsheets.values.append({
+    spreadsheetId: plannerSpreadsheetId,
+    range: `'${env.plannerLogSheetName}'!A:S`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
     requestBody: {

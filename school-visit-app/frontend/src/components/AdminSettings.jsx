@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { api } from '../api/client';
 
 const defaultSettings = {
   adminEmails: 'karthik@superteacher.in, karthikv@superteacher.in, vasudevan@superteacher.in, bhanu@superteacher.in',
@@ -17,10 +18,27 @@ export default function AdminSettings() {
     }
   });
   const [message, setMessage] = useState('');
+  const [sheetDashboardUrl, setSheetDashboardUrl] = useState('');
+  const [buildingDashboard, setBuildingDashboard] = useState(false);
 
   const saveSettings = () => {
     localStorage.setItem('schoolVisitAdminSettings', JSON.stringify(settings));
     setMessage('Settings notes saved locally.');
+  };
+
+  const buildPlannerDashboard = async () => {
+    setBuildingDashboard(true);
+    setMessage('');
+
+    try {
+      const response = await api.post('/plans/dashboard-sheet');
+      setSheetDashboardUrl(response.data.url || '');
+      setMessage(response.data.message || 'Planner dashboard sheet created.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Could not build planner dashboard sheet.');
+    } finally {
+      setBuildingDashboard(false);
+    }
   };
 
   return (
@@ -48,8 +66,18 @@ export default function AdminSettings() {
         <button type="button" className="primary-button" onClick={saveSettings}>
           Save Notes
         </button>
+        <button type="button" className="secondary-button" onClick={buildPlannerDashboard} disabled={buildingDashboard}>
+          {buildingDashboard ? 'Building Sheet Dashboard...' : 'Build Planner Sheet Dashboard'}
+        </button>
       </div>
       {message && <div className="status-text tracking-message">{message}</div>}
+      {sheetDashboardUrl && (
+        <div className="tracking-message">
+          <a href={sheetDashboardUrl} target="_blank" rel="noreferrer">
+            Open Planner Dashboard Sheet
+          </a>
+        </div>
+      )}
     </section>
   );
 }

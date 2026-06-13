@@ -1459,6 +1459,106 @@ tbody tr:last-child td {
   line-height: 1.55;
 }
 
+.planner-dashboard-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.planner-dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.planner-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.planner-mini-panel {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff, #f8fcfa);
+}
+
+.planner-mini-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.planner-mini-head h3 {
+  margin: 0;
+  color: #173723;
+  font-size: 16px;
+}
+
+.planner-mini-head span,
+.planner-manager-card span,
+.planner-date-row span,
+.planner-attention-row span,
+.planner-status-pill-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.planner-status-row,
+.planner-manager-grid,
+.planner-date-list,
+.planner-attention-list {
+  display: grid;
+  gap: 10px;
+}
+
+.planner-status-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.planner-status-pill-card,
+.planner-manager-card,
+.planner-date-row,
+.planner-attention-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface-soft);
+}
+
+.planner-status-pill-card strong,
+.planner-manager-card strong,
+.planner-date-row strong,
+.planner-attention-row strong {
+  display: block;
+  color: #173723;
+}
+
+.planner-date-row,
+.planner-attention-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.planner-manager-mix,
+.planner-attention-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.planner-manager-mix span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #ffffff;
+}
+
 .compact-select {
   width: auto;
   min-height: 30px;
@@ -1647,6 +1747,12 @@ a {
   .dashboard-stats,
   .dashboard-grid,
   .success-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .planner-dashboard-stats,
+  .planner-dashboard-grid,
+  .planner-status-row {
     grid-template-columns: 1fr;
   }
 

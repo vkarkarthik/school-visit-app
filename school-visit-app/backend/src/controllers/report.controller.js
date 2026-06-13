@@ -395,6 +395,12 @@ export const getSchoolTrackingController = asyncHandler(async (req, res) => {
 export const getReportsDashboardController = asyncHandler(async (req, res) => {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
+  const nextWeekEnd = new Date(todayStart);
+  nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
   const year = Number(req.query.year || now.getFullYear());
   const yearStart = new Date(year, 0, 1);
   const yearEnd = new Date(year + 1, 0, 1);
@@ -414,10 +420,51 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
 
   const managerMap = new Map();
   const purposeMap = new Map();
+  const planStatusMap = new Map();
+  const planManagerMap = new Map();
+  const planDateMap = new Map();
 
   for (const report of reports) {
     managerMap.set(report.programManagerName, (managerMap.get(report.programManagerName) || 0) + 1);
     purposeMap.set(report.purposeOfVisit, (purposeMap.get(report.purposeOfVisit) || 0) + 1);
+  }
+
+  for (const plan of plans) {
+    planStatusMap.set(plan.status, (planStatusMap.get(plan.status) || 0) + 1);
+
+    const managerKey = plan.programManagerEmail || plan.programManagerName || "Unknown PM";
+    if (!planManagerMap.has(managerKey)) {
+      planManagerMap.set(managerKey, {
+        key: managerKey,
+        name: plan.programManagerName || "Unknown PM",
+        email: plan.programManagerEmail || "",
+        total: 0,
+        draft: 0,
+        confirmed: 0,
+        completed: 0,
+        cancelled: 0,
+      });
+    }
+
+    const managerEntry = planManagerMap.get(managerKey);
+    managerEntry.total += 1;
+    managerEntry[String(plan.status || "").toLowerCase()] += 1;
+
+    const dateKey = new Date(plan.plannedDate).toISOString().slice(0, 10);
+    if (!planDateMap.has(dateKey)) {
+      planDateMap.set(dateKey, {
+        date: dateKey,
+        total: 0,
+        confirmed: 0,
+        draft: 0,
+        completed: 0,
+        cancelled: 0,
+      });
+    }
+
+    const dateEntry = planDateMap.get(dateKey);
+    dateEntry.total += 1;
+    dateEntry[String(plan.status || "").toLowerCase()] += 1;
   }
 
   const pendingActionItems = reports.flatMap((report) =>
@@ -466,6 +513,33 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
     upcomingPlans: plans
       .filter((plan) => ["Confirmed", "Draft"].includes(plan.status) && new Date(plan.plannedDate) >= now)
       .slice(0, 10),
+    plannerDashboard: {
+      statusMix: [...planStatusMap.entries()]
+        .map(([status, count]) => ({ status, count }))
+        .sort((a, b) => b.count - a.count),
+      byManager: [...planManagerMap.values()].sort((a, b) => b.total - a.total),
+      byDate: [...planDateMap.values()]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(0, 14),
+      todayPlans: plans.filter((plan) => {
+        const plannedDate = new Date(plan.plannedDate);
+        return plannedDate >= todayStart && plannedDate < todayEnd;
+      }),
+      nextSevenDaysPlans: plans.filter((plan) => {
+        const plannedDate = new Date(plan.plannedDate);
+        return ["Draft", "Confirmed"].includes(plan.status) && plannedDate >= todayStart && plannedDate < nextWeekEnd;
+      }),
+      attentionPlans: plans
+        .filter((plan) => {
+          const plannedDate = new Date(plan.plannedDate);
+          const isOpen = ["Draft", "Confirmed"].includes(plan.status);
+          const isPastDue = isOpen && plannedDate < todayStart;
+          const syncFailed = plan.plannerSheetStatus === "Failed" || plan.notificationStatus === "Failed";
+          return isPastDue || syncFailed;
+        })
+        .sort((a, b) => new Date(a.plannedDate) - new Date(b.plannedDate))
+        .slice(0, 12),
+    },
   });
 });
 

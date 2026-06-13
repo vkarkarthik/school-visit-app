@@ -1,7 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
 import { VisitPlan } from "../models/VisitPlan.js";
-import { appendPlanLogToSheet } from "../services/sheets.service.js";
+import { appendPlanLogToSheet, buildPlannerDashboardSheet } from "../services/sheets.service.js";
 import { sendPlanNotificationEmail, sendPlanReminderEmail } from "../services/email.service.js";
 
 function validateEmail(value) {
@@ -239,5 +239,15 @@ export const sendPlanReminderController = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: "Visit reminder sent successfully.",
+  });
+});
+
+export const buildPlannerDashboardController = asyncHandler(async (req, res) => {
+  const result = await buildPlannerDashboardSheet();
+
+  res.json({
+    success: true,
+    message: "Planner sheet dashboard created successfully.",
+    ...result,
   });
 });

@@ -42,6 +42,7 @@ export default function OperationsDashboard() {
   };
 
   const summary = dashboard?.summary || {};
+  const plannerDashboard = dashboard?.plannerDashboard || {};
   const filteredRecentReports = (dashboard?.recentReports || []).filter((report) => {
     const search = reportFilters.search.toLowerCase();
     const manager = reportFilters.manager.toLowerCase();
@@ -119,6 +120,111 @@ export default function OperationsDashboard() {
               />
             </Panel>
           </div>
+
+          <Panel title="Daily Planner Dashboard">
+            <div className="planner-dashboard-shell">
+              <div className="planner-dashboard-stats">
+                <Metric label="Today" value={plannerDashboard.todayPlans?.length || 0} tone="blue" />
+                <Metric label="Next 7 Days" value={plannerDashboard.nextSevenDaysPlans?.length || 0} tone="green" />
+                <Metric label="Needs Attention" value={plannerDashboard.attentionPlans?.length || 0} tone="red" />
+                <Metric
+                  label="Sheet Failures"
+                  value={(plannerDashboard.attentionPlans || []).filter((plan) => plan.plannerSheetStatus === 'Failed').length}
+                  tone="yellow"
+                />
+              </div>
+
+              <div className="planner-dashboard-grid">
+                <div className="planner-mini-panel">
+                  <div className="planner-mini-head">
+                    <h3>Status Mix</h3>
+                    <span>{(plannerDashboard.statusMix || []).reduce((sum, item) => sum + item.count, 0)} plans</span>
+                  </div>
+                  <div className="planner-status-row">
+                    {(plannerDashboard.statusMix || []).map((item) => (
+                      <div key={item.status} className="planner-status-pill-card">
+                        <span>{item.status}</span>
+                        <strong>{item.count}</strong>
+                      </div>
+                    ))}
+                    {!plannerDashboard.statusMix?.length && <div className="empty-state">No planner data yet.</div>}
+                  </div>
+                </div>
+
+                <div className="planner-mini-panel">
+                  <div className="planner-mini-head">
+                    <h3>Next 14 Days</h3>
+                    <span>Daily load</span>
+                  </div>
+                  <div className="planner-date-list">
+                    {(plannerDashboard.byDate || []).map((item) => (
+                      <div key={item.date} className="planner-date-row">
+                        <div>
+                          <strong>{new Date(item.date).toLocaleDateString('en-IN')}</strong>
+                          <span>
+                            Draft {item.draft} | Confirmed {item.confirmed} | Completed {item.completed}
+                          </span>
+                        </div>
+                        <strong>{item.total}</strong>
+                      </div>
+                    ))}
+                    {!plannerDashboard.byDate?.length && <div className="empty-state">No date-wise plans yet.</div>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="planner-dashboard-grid">
+                <div className="planner-mini-panel">
+                  <div className="planner-mini-head">
+                    <h3>Program Manager Load</h3>
+                    <span>Who is handling what</span>
+                  </div>
+                  <div className="planner-manager-grid">
+                    {(plannerDashboard.byManager || []).slice(0, 8).map((item) => (
+                      <article key={item.key} className="planner-manager-card">
+                        <strong>{item.name}</strong>
+                        <span>{item.email || 'Email not available'}</span>
+                        <div className="planner-manager-mix">
+                          <span>Total {item.total}</span>
+                          <span>Draft {item.draft}</span>
+                          <span>Confirmed {item.confirmed}</span>
+                          <span>Completed {item.completed}</span>
+                        </div>
+                      </article>
+                    ))}
+                    {!plannerDashboard.byManager?.length && <div className="empty-state">No PM planner data yet.</div>}
+                  </div>
+                </div>
+
+                <div className="planner-mini-panel">
+                  <div className="planner-mini-head">
+                    <h3>Attention Needed</h3>
+                    <span>Past-due or sync issue plans</span>
+                  </div>
+                  <div className="planner-attention-list">
+                    {(plannerDashboard.attentionPlans || []).map((plan) => (
+                      <div key={plan._id} className="planner-attention-row">
+                        <div>
+                          <strong>{plan.schoolName}</strong>
+                          <span>
+                            {new Date(plan.plannedDate).toLocaleDateString('en-IN')} | {plan.programManagerName} | {plan.status}
+                          </span>
+                        </div>
+                        <div className="planner-attention-tags">
+                          {plan.plannerSheetStatus === 'Failed' && <span className="status-pill failed">Sheet</span>}
+                          {plan.notificationStatus === 'Failed' && <span className="status-pill failed">Notify</span>}
+                          {new Date(plan.plannedDate) < new Date() && ['Draft', 'Confirmed'].includes(plan.status) && (
+                            <span className="status-pill warning">Past Due</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {!plannerDashboard.attentionPlans?.length && <div className="empty-state">No planner attention items.</div>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Panel>
 
           <div className="dashboard-grid wide">
             <Panel title="Upcoming Planned Visits">
