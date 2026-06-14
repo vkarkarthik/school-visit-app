@@ -138,7 +138,12 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
     setMessage("");
 
     try {
-      const response = await api.post("/plans", form);
+      const payload = {
+        ...form,
+        programManagerName: isAdmin ? form.programManagerName : currentUser?.name || form.programManagerName,
+        programManagerEmail: isAdmin ? form.programManagerEmail : currentUser?.email || form.programManagerEmail,
+      };
+      const response = await api.post("/plans", payload);
       setMessage(response.data.message || "Plan saved.");
       setForm(emptyForm(currentUser));
       await loadPlans();
@@ -317,7 +322,13 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
 
               <label>
                 Program Manager
-                <input name="programManagerName" value={form.programManagerName} onChange={handleChange} required />
+                <input
+                  name="programManagerName"
+                  value={form.programManagerName}
+                  onChange={handleChange}
+                  readOnly={!isAdmin}
+                  required
+                />
               </label>
 
               <label>
@@ -327,9 +338,16 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                   name="programManagerEmail"
                   value={form.programManagerEmail}
                   onChange={handleChange}
+                  readOnly={!isAdmin}
                   required
                 />
               </label>
+
+              {!isAdmin && (
+                <div className="full-span help-text">
+                  Planner entries for PMs are locked to the signed-in SuperTeacher account so plans always save under the correct owner.
+                </div>
+              )}
 
               <label>
                 Purpose of Visit

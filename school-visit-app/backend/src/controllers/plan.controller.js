@@ -55,13 +55,15 @@ export const createPlanController = asyncHandler(async (req, res) => {
     planningNotes,
   } = req.body;
 
-  if (!state || !schoolName || !programManagerName || !programManagerEmail || !purposeOfVisit || !workPlanned || !plannedDate) {
-    throw new AppError("Missing required planning fields.", 400);
-  }
+  const normalizedManagerEmail = req.isAdmin
+    ? String(programManagerEmail || "").trim().toLowerCase()
+    : req.userEmail;
+  const normalizedManagerName = req.isAdmin
+    ? String(programManagerName || "").trim()
+    : String(programManagerName || currentUserNameFromEmail(req.userEmail)).trim();
 
-  const normalizedManagerEmail = String(programManagerEmail || "").trim().toLowerCase();
-  if (normalizedManagerEmail !== req.userEmail && !req.isAdmin) {
-    throw new AppError("You can create plans only for your own account.", 403);
+  if (!state || !schoolName || !normalizedManagerName || !normalizedManagerEmail || !purposeOfVisit || !workPlanned || !plannedDate) {
+    throw new AppError("Missing required planning fields.", 400);
   }
 
   if (!validateEmail(normalizedManagerEmail)) {
@@ -80,7 +82,7 @@ export const createPlanController = asyncHandler(async (req, res) => {
     contactNo,
     schoolEmail,
     course,
-    programManagerName,
+    programManagerName: normalizedManagerName,
     programManagerEmail: normalizedManagerEmail,
     purposeOfVisit,
     workPlanned,
@@ -134,6 +136,13 @@ export const createPlanController = asyncHandler(async (req, res) => {
     plan,
   });
 });
+
+function currentUserNameFromEmail(email) {
+  return String(email || "")
+    .split("@")[0]
+    .replace(/[._-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
 export const listPlansController = asyncHandler(async (req, res) => {
   const filter = buildListFilter(req.query, req);
