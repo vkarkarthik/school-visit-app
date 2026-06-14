@@ -2,7 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
 import { VisitPlan } from "../models/VisitPlan.js";
 import { appendPlanLogToSheet, buildPlannerDashboardSheet } from "../services/sheets.service.js";
-import { sendPlanNotificationEmail, sendPlanReminderEmail } from "../services/email.service.js";
+import { sendPlanReminderEmail } from "../services/email.service.js";
 
 function validateEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ""));
@@ -92,8 +92,8 @@ export const createPlanController = asyncHandler(async (req, res) => {
     status: ["Draft", "Confirmed", "Completed", "Cancelled"].includes(status) ? status : "Draft",
     planningNotes,
     year: new Date(plannedDate).getFullYear(),
-    calendarSyncStatus: status === "Confirmed" ? "Pending" : "Not Synced",
-    notificationStatus: status === "Confirmed" ? "Pending" : "Not Required",
+    calendarSyncStatus: "Not Synced",
+    notificationStatus: "Not Required",
   });
 
   try {
@@ -105,18 +105,6 @@ export const createPlanController = asyncHandler(async (req, res) => {
     plan.plannerSheetError = error.message || "Failed to save planner log";
   }
 
-  if (plan.status === "Confirmed") {
-    try {
-      await sendPlanNotificationEmail(plan);
-      plan.notificationStatus = "Sent";
-      plan.notificationError = "";
-      plan.lastNotifiedAt = new Date();
-    } catch (error) {
-      plan.notificationStatus = "Failed";
-      plan.notificationError = error.message || "Failed to send notification";
-    }
-  }
-
   await plan.save();
 
   res.status(201).json({
@@ -125,11 +113,6 @@ export const createPlanController = asyncHandler(async (req, res) => {
       [
         "Plan saved successfully.",
         plan.plannerSheetStatus === "Saved" ? "Planner log updated in Google Sheet." : "Planner log could not be saved.",
-        plan.status === "Confirmed"
-          ? plan.notificationStatus === "Sent"
-            ? "Confirmation email sent."
-            : "Plan confirmed, but notification email failed."
-          : "",
       ]
         .filter(Boolean)
         .join(" "),
@@ -179,18 +162,11 @@ export const updatePlanStatusController = asyncHandler(async (req, res) => {
   }
 
   plan.status = status;
-  plan.calendarSyncStatus = status === "Confirmed" ? "Pending" : "Not Synced";
-  if (status !== "Confirmed") {
-    plan.calendarEventId = "";
-    plan.calendarSyncError = "";
-  }
-
-  if (status === "Confirmed") {
-    plan.notificationStatus = "Pending";
-  } else {
-    plan.notificationStatus = "Not Required";
-    plan.notificationError = "";
-  }
+  plan.calendarSyncStatus = "Not Synced";
+  plan.calendarEventId = "";
+  plan.calendarSyncError = "";
+  plan.notificationStatus = "Not Required";
+  plan.notificationError = "";
 
   try {
     await appendPlanLogToSheet(plan, "Status Updated");
@@ -201,18 +177,6 @@ export const updatePlanStatusController = asyncHandler(async (req, res) => {
     plan.plannerSheetError = error.message || "Failed to save planner log";
   }
 
-  if (status === "Confirmed") {
-    try {
-      await sendPlanNotificationEmail(plan);
-      plan.notificationStatus = "Sent";
-      plan.notificationError = "";
-      plan.lastNotifiedAt = new Date();
-    } catch (error) {
-      plan.notificationStatus = "Failed";
-      plan.notificationError = error.message || "Failed to send notification";
-    }
-  }
-
   await plan.save();
 
   res.json({
@@ -221,11 +185,6 @@ export const updatePlanStatusController = asyncHandler(async (req, res) => {
       [
         "Plan status updated successfully.",
         plan.plannerSheetStatus === "Saved" ? "Planner log updated in Google Sheet." : "Planner log could not be saved.",
-        status === "Confirmed"
-          ? plan.notificationStatus === "Sent"
-            ? "Confirmation email sent."
-            : "Plan confirmed, but notification email failed."
-          : "",
       ]
         .filter(Boolean)
         .join(" "),
@@ -243,6 +202,8 @@ export const sendPlanReminderController = asyncHandler(async (req, res) => {
 
   await sendPlanReminderEmail(plan.toObject());
   plan.lastNotifiedAt = new Date();
+  plan.notificationStatus = "Sent";
+  plan.notificationError = "";
   await plan.save();
 
   res.json({

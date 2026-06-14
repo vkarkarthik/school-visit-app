@@ -694,6 +694,25 @@ body {
   line-height: 1.5;
 }
 
+.plan-copy-block {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.plan-copy-block p {
+  margin: 6px 0 0;
+  color: #244032;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.plan-copy-block-notes {
+  background: var(--surface-soft);
+}
+
 .plan-status-stack {
   display: flex;
   flex-direction: column;
@@ -1396,6 +1415,12 @@ tbody tr:last-child td {
 .report-row span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.plan-list-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .row-actions {

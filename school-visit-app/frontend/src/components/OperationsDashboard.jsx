@@ -489,11 +489,13 @@ function PlanList({ plans = [], emptyText, action }) {
     <div className="report-list">
       {plans.map((plan) => (
         <div key={plan._id} className="report-row">
-          <div>
+          <div className="plan-list-copy">
             <strong>{plan.schoolName}</strong>
             <span>
               {new Date(plan.plannedDate).toLocaleDateString('en-IN')} | {plan.purposeOfVisit} | {plan.programManagerName}
             </span>
+            <span>{plan.workPlanned || 'Work plan not added'}</span>
+            {plan.planningNotes && <span>Notes: {plan.planningNotes}</span>}
           </div>
           {action ? action(plan) : <span className={`status-pill ${getPlanTone(plan.status)}`}>{plan.status}</span>}
         </div>

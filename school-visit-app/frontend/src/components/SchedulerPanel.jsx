@@ -635,7 +635,17 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                         </span>
                       </div>
 
-                      <p>{plan.workPlanned}</p>
+                      <div className="plan-copy-block">
+                        <span className="eyebrow">Work Planned</span>
+                        <p>{plan.workPlanned}</p>
+                      </div>
+
+                      {plan.planningNotes && (
+                        <div className="plan-copy-block plan-copy-block-notes">
+                          <span className="eyebrow">Planning Notes</span>
+                          <p>{plan.planningNotes}</p>
+                        </div>
+                      )}
 
                       <div className="plan-footer">
                         <div className="plan-status-stack">
@@ -644,7 +654,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                             {plan.plannerSheetError ? ` (${plan.plannerSheetError})` : ""}
                           </span>
                           <span className="muted-text">
-                            Notification: {plan.notificationStatus || "Not Required"}
+                            Reminder: {plan.notificationStatus || "Not Required"}
                             {plan.notificationError ? ` (${plan.notificationError})` : ""}
                           </span>
                           {plan.convertedReportId && <span className="muted-text">Converted to report</span>}
