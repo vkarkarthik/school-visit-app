@@ -1,5 +1,6 @@
 import { sheetsClient } from "../config/google.js";
 import { env } from "../config/env.js";
+import { VisitPlan } from "../models/VisitPlan.js";
 
 const NEW_SCHOOL_HEADERS = [
   "Submitted At",
@@ -532,6 +533,109 @@ function buildChartRequest({ sheetId, title, chartType = "COLUMN", domainStartRo
   };
 }
 
+async function upsertPlannerSnapshotRow(spreadsheetId, sheetName, planId, row) {
+  const response = await sheetsClient.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${sheetName}'!A:S`,
+  });
+
+  const rows = response.data.values || [];
+  const existingIndex = rows.slice(1).findIndex((currentRow) => String(currentRow[2] || "") === String(planId || ""));
+
+  if (existingIndex === -1) {
+    await sheetsClient.spreadsheets.values.append({
+      spreadsheetId,
+      range: `'${sheetName}'!A:S`,
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: {
+        values: [row],
+      },
+    });
+    return;
+  }
+
+  const rowNumber = existingIndex + 2;
+  await sheetsClient.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${sheetName}'!A${rowNumber}:S${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [row],
+    },
+  });
+}
+
+function buildPlannerRow(plan, action = "Created") {
+  return [
+    new Date().toLocaleString("en-IN"),
+    action,
+    String(plan._id || ""),
+    plan.status || "",
+    plan.programManagerName || "",
+    plan.programManagerEmail || "",
+    plan.schoolName || "",
+    plan.state || "",
+    plan.city || "",
+    plan.purposeOfVisit || "",
+    plan.workPlanned || "",
+    plan.plannedDate ? new Date(plan.plannedDate).toLocaleDateString("en-IN") : "",
+    plan.plannedStartTime || "",
+    plan.plannedEndTime || "",
+    plan.pointOfContact || "",
+    plan.contactNo || "",
+    plan.schoolEmail || "",
+    plan.course || "",
+    plan.planningNotes || "",
+  ];
+}
+
+async function rewritePmSnapshotSheets(spreadsheetId, plans = []) {
+  const groupedPlans = new Map();
+
+  for (const plan of plans) {
+    const sheetName = buildPlannerSheetTabName(plan);
+    if (!groupedPlans.has(sheetName)) {
+      groupedPlans.set(sheetName, []);
+    }
+    groupedPlans.get(sheetName).push(plan);
+  }
+
+  for (const [sheetName, groupPlans] of groupedPlans.entries()) {
+    await ensureSheetWithHeadersInSpreadsheet(
+      spreadsheetId,
+      sheetName,
+      PLANNER_LOG_HEADERS,
+      `'${sheetName}'!A1:S1`
+    );
+
+    await sheetsClient.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `'${sheetName}'!A:S`,
+    });
+
+    await sheetsClient.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${sheetName}'!A1:S1`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [PLANNER_LOG_HEADERS],
+      },
+    });
+
+    if (groupPlans.length) {
+      await sheetsClient.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${sheetName}'!A2:S${groupPlans.length + 1}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: groupPlans.map((plan) => buildPlannerRow(plan, "Current Snapshot")),
+        },
+      });
+    }
+  }
+}
+
 function buildSlicerRequest({ sheetId, title, dataStartRow = 9, dataEndRow = 1000, dataStartColumn = 23, dataEndColumn = 43, columnIndex, rowIndex, columnAnchor }) {
   return {
     addSlicer: {
@@ -572,10 +676,12 @@ function buildSlicerRequest({ sheetId, title, dataStartRow = 9, dataEndRow = 100
 export async function buildPlannerDashboardSheet() {
   const spreadsheetId = env.plannerSpreadsheetId;
   await renameSheetIfNeeded(spreadsheetId, LEGACY_PLANNER_DASHBOARD_SHEET, PLANNER_DASHBOARD_SHEET);
-  const sheets = await getSpreadsheetSheets(spreadsheetId);
-  const pmSheets = sheets
-    .map((sheet) => sheet.properties?.title)
-    .filter((title) => String(title || "").startsWith("PM - "));
+  const currentPlans = await VisitPlan.find({})
+    .sort({ programManagerEmail: 1, plannedDate: 1, createdAt: -1 })
+    .lean();
+  const pmSheets = [...new Set(currentPlans.map((plan) => buildPlannerSheetTabName(plan)))];
+
+  await rewritePmSnapshotSheets(spreadsheetId, currentPlans);
 
   await recreateSheetInSpreadsheet(spreadsheetId, PLANNER_DASHBOARD_HELPER_SHEET, true);
   const dashboardProps = await ensureSheetInSpreadsheet(spreadsheetId, PLANNER_DASHBOARD_SHEET, false);
@@ -588,10 +694,10 @@ export async function buildPlannerDashboardSheet() {
 
   await sheetsClient.spreadsheets.values.update({
     spreadsheetId,
-    range: `'${PLANNER_DASHBOARD_HELPER_SHEET}'!A1`,
+    range: `'${PLANNER_DASHBOARD_HELPER_SHEET}'!A1:S${currentPlans.length + 1}`,
     valueInputOption: "USER_ENTERED",
     requestBody: {
-      values: [[buildPlannerAggregateFormula(pmSheets)]],
+      values: [PLANNER_LOG_HEADERS, ...currentPlans.map((plan) => buildPlannerRow(plan, "Current Snapshot"))],
     },
   });
 
@@ -1109,10 +1215,10 @@ export async function buildPlannerDashboardSheet() {
             rule: { condition: { type: "ONE_OF_RANGE", values: [{ userEnteredValue: `='${MANAGEMENT_DASHBOARD_SHEET}'!AV2:AV` }] }, strict: true, showCustomUi: true },
           },
         },
-        buildChartRequest({ sheetId: managementProps.sheetId, title: "Status Mix", chartType: "COLUMN", domainStartRow: 16, domainEndRow: 22, domainColumn: 0, seriesColumn: 1, anchorRow: 1, anchorColumn: 10, width: 360, height: 220 }),
-        buildChartRequest({ sheetId: managementProps.sheetId, title: "PM Load", chartType: "BAR", domainStartRow: 16, domainEndRow: 26, domainColumn: 3, seriesColumn: 4, anchorRow: 1, anchorColumn: 16, width: 420, height: 240 }),
-        buildChartRequest({ sheetId: managementProps.sheetId, title: "State Load", chartType: "COLUMN", domainStartRow: 16, domainEndRow: 26, domainColumn: 6, seriesColumn: 7, anchorRow: 14, anchorColumn: 10, width: 360, height: 220 }),
-        buildChartRequest({ sheetId: managementProps.sheetId, title: "Purpose Mix", chartType: "BAR", domainStartRow: 16, domainEndRow: 28, domainColumn: 9, seriesColumn: 10, anchorRow: 14, anchorColumn: 16, width: 420, height: 240 }),
+        buildChartRequest({ sheetId: managementProps.sheetId, title: "Status Mix", chartType: "COLUMN", domainStartRow: 17, domainEndRow: 27, domainColumn: 0, seriesColumn: 1, anchorRow: 1, anchorColumn: 10, width: 360, height: 220 }),
+        buildChartRequest({ sheetId: managementProps.sheetId, title: "PM Load", chartType: "BAR", domainStartRow: 17, domainEndRow: 27, domainColumn: 3, seriesColumn: 4, anchorRow: 1, anchorColumn: 16, width: 420, height: 240 }),
+        buildChartRequest({ sheetId: managementProps.sheetId, title: "State Load", chartType: "COLUMN", domainStartRow: 17, domainEndRow: 27, domainColumn: 6, seriesColumn: 7, anchorRow: 14, anchorColumn: 10, width: 360, height: 220 }),
+        buildChartRequest({ sheetId: managementProps.sheetId, title: "Purpose Mix", chartType: "BAR", domainStartRow: 17, domainEndRow: 29, domainColumn: 9, seriesColumn: 10, anchorRow: 14, anchorColumn: 16, width: 420, height: 240 }),
         buildSlicerRequest({ sheetId: managementProps.sheetId, title: "Status Slicer", columnIndex: 3, rowIndex: 27, columnAnchor: 0 }),
         buildSlicerRequest({ sheetId: managementProps.sheetId, title: "PM Slicer", columnIndex: 4, rowIndex: 27, columnAnchor: 3 }),
         buildSlicerRequest({ sheetId: managementProps.sheetId, title: "State Slicer", columnIndex: 7, rowIndex: 27, columnAnchor: 6 }),
@@ -1204,37 +1310,9 @@ export async function appendPlanLogToSheet(plan, action = "Created") {
     `'${plannerTabName}'!A1:S1`
   );
 
-  const row = [
-    new Date().toLocaleString("en-IN"),
-    action,
-    String(plan._id || ""),
-    plan.status || "",
-    plan.programManagerName || "",
-    plan.programManagerEmail || "",
-    plan.schoolName || "",
-    plan.state || "",
-    plan.city || "",
-    plan.purposeOfVisit || "",
-    plan.workPlanned || "",
-    plan.plannedDate ? new Date(plan.plannedDate).toLocaleDateString("en-IN") : "",
-    plan.plannedStartTime || "",
-    plan.plannedEndTime || "",
-    plan.pointOfContact || "",
-    plan.contactNo || "",
-    plan.schoolEmail || "",
-    plan.course || "",
-    plan.planningNotes || "",
-  ];
+  const row = buildPlannerRow(plan, action);
 
-  await sheetsClient.spreadsheets.values.append({
-    spreadsheetId: plannerSpreadsheetId,
-    range: `'${plannerTabName}'!A:S`,
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: {
-      values: [row],
-    },
-  });
+  await upsertPlannerSnapshotRow(plannerSpreadsheetId, plannerTabName, String(plan._id || ""), row);
 
   await sheetsClient.spreadsheets.values.append({
     spreadsheetId: plannerSpreadsheetId,

@@ -671,7 +671,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                           <button type="button" className="table-action" onClick={() => sendReminder(plan._id)}>
                             Remind
                           </button>
-                          {PLAN_STATUSES.map((status) => (
+                          {getAvailableStatusActions(plan.status, isAdmin).map((status) => (
                             <button
                               key={status}
                               type="button"
@@ -729,4 +729,12 @@ function getStatusTone(status) {
   if (status === "Cancelled") return "failed";
   if (status === "Confirmed") return "info";
   return "warning";
+}
+
+function getAvailableStatusActions(currentStatus, isAdmin) {
+  if (!isAdmin && currentStatus === "Completed") {
+    return ["Completed"];
+  }
+
+  return PLAN_STATUSES;
 }

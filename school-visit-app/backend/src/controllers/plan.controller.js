@@ -161,6 +161,10 @@ export const updatePlanStatusController = asyncHandler(async (req, res) => {
     throw new AppError("Plan not found.", 404);
   }
 
+  if (!req.isAdmin && plan.status === "Completed" && status !== "Completed") {
+    throw new AppError("Completed plans are locked for PMs. Please contact admin for changes.", 400);
+  }
+
   plan.status = status;
   plan.calendarSyncStatus = "Not Synced";
   plan.calendarEventId = "";
