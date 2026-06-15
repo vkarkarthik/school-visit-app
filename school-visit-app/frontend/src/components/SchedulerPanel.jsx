@@ -303,7 +303,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
         <div className="panel-header">
           <div>
             <span className="eyebrow">Planning workspace</span>
-            <h2>Schedule school visits</h2>
+            <h2>{isSchoolVisitMode ? "Schedule school visits" : "Schedule work plans"}</h2>
           </div>
           <span className="panel-badge">{isAdmin ? "Admin view" : "Private PM view"}</span>
         </div>
@@ -461,52 +461,106 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
             <div className="flow-heading">
               <span>2</span>
               <div>
-                <h3>Planned work</h3>
-                <p>Capture exactly what work is expected on the ground.</p>
+                <h3>{isSchoolVisitMode ? "Planned work" : "Planned internal work"}</h3>
+                <p>
+                  {isSchoolVisitMode
+                    ? "Capture exactly what work is expected on the ground."
+                    : "Capture the internal work expected from home, office, travel, or other non-school modes."}
+                </p>
               </div>
             </div>
 
             <div className="form-grid">
               <label className="full-span">
-                Work Planned
+                {isSchoolVisitMode ? "Work Planned" : "Planned Work Items"}
                 <textarea
                   name="workPlanned"
                   rows="4"
                   value={form.workPlanned}
                   onChange={handleChange}
-                  placeholder="Teacher induction, robotics demo, material handover, follow-up review..."
+                  placeholder={
+                    isSchoolVisitMode
+                      ? "Teacher induction, robotics demo, material handover, follow-up review..."
+                      : "Proposal preparation, lesson planning, report corrections, follow-up calls, content review..."
+                  }
                   required
                 />
               </label>
 
-              <label>
-                School Email
-                <input type="email" name="schoolEmail" value={form.schoolEmail} onChange={handleChange} />
-              </label>
+              {isSchoolVisitMode ? (
+                <>
+                  <label>
+                    School Email
+                    <input type="email" name="schoolEmail" value={form.schoolEmail} onChange={handleChange} />
+                  </label>
 
-              <label>
-                Contact Number
-                <input name="contactNo" value={form.contactNo} onChange={handleChange} />
-              </label>
+                  <label>
+                    Contact Number
+                    <input name="contactNo" value={form.contactNo} onChange={handleChange} />
+                  </label>
 
-              <label>
-                Point of Contact
-                <input name="pointOfContact" value={form.pointOfContact} onChange={handleChange} />
-              </label>
+                  <label>
+                    Point of Contact
+                    <input name="pointOfContact" value={form.pointOfContact} onChange={handleChange} />
+                  </label>
 
-              <label>
-                Course / Requirement
-                <input name="course" value={form.course} onChange={handleChange} />
-              </label>
+                  <label>
+                    Course / Requirement
+                    <input name="course" value={form.course} onChange={handleChange} />
+                  </label>
+                </>
+              ) : (
+                <>
+                  <label>
+                    Internal Stakeholder
+                    <input
+                      name="pointOfContact"
+                      value={form.pointOfContact}
+                      onChange={handleChange}
+                      placeholder="Manager, team lead, ops contact"
+                    />
+                  </label>
+
+                  <label>
+                    Contact Number
+                    <input name="contactNo" value={form.contactNo} onChange={handleChange} placeholder="Optional" />
+                  </label>
+
+                  <label>
+                    Work Email
+                    <input
+                      type="email"
+                      name="schoolEmail"
+                      value={form.schoolEmail}
+                      onChange={handleChange}
+                      placeholder="Optional work recipient"
+                    />
+                  </label>
+
+                  <label>
+                    Program / Focus Area
+                    <input
+                      name="course"
+                      value={form.course}
+                      onChange={handleChange}
+                      placeholder="Content, training, review, operations"
+                    />
+                  </label>
+                </>
+              )}
 
               <label className="full-span">
-                Planning Notes
+                {isSchoolVisitMode ? "Planning Notes" : "Work Notes"}
                 <textarea
                   name="planningNotes"
                   rows="3"
                   value={form.planningNotes}
                   onChange={handleChange}
-                  placeholder="Anything ops/admin should know before the visit."
+                  placeholder={
+                    isSchoolVisitMode
+                      ? "Anything ops/admin should know before the visit."
+                      : "Anything ops/admin should know before the internal work starts."
+                  }
                 />
               </label>
             </div>
