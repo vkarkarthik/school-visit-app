@@ -576,6 +576,24 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
                 <input value={editingReport.ccEmails || ''} onChange={(e) => setEditingReport({ ...editingReport, ccEmails: e.target.value })} />
               </label>
               <label className="full-width">
+                Actual Work Done
+                <textarea rows="4" value={editingReport.actualWorkDone || ''} onChange={(e) => setEditingReport({ ...editingReport, actualWorkDone: e.target.value })} />
+              </label>
+              <label>
+                Work Mode
+                <select value={editingReport.workMode || 'School Visit'} onChange={(e) => setEditingReport({ ...editingReport, workMode: e.target.value })}>
+                  <option>School Visit</option>
+                  <option>Work From Home</option>
+                  <option>Work From Office</option>
+                  <option>Travel</option>
+                  <option>Other</option>
+                </select>
+              </label>
+              <label>
+                Actual Location
+                <input value={editingReport.actualLocation || ''} onChange={(e) => setEditingReport({ ...editingReport, actualLocation: e.target.value })} />
+              </label>
+              <label className="full-width">
                 Session Summary
                 <textarea rows="5" value={editingReport.sessionSummary || ''} onChange={(e) => setEditingReport({ ...editingReport, sessionSummary: e.target.value })} />
               </label>

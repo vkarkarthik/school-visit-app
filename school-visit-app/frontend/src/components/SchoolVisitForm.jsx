@@ -97,6 +97,9 @@ const emptyForm = (currentUser = {}) => ({
   ccEmails: '',
   purposeOfVisit: '',
   visitDate: '',
+  workMode: 'School Visit',
+  actualLocation: '',
+  actualWorkDone: '',
   sessionSummary: '',
   actionItems: '',
   guidedDetails: {},
@@ -133,6 +136,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
   const hasSchoolMaster = states.length > 0 && schools.length > 0;
   const isNewSchool = form.isNewSchool === 'true';
+  const isSchoolVisitMode = form.workMode === 'School Visit';
   const purposeGuide = PURPOSE_GUIDES[form.purposeOfVisit];
   const generatedCopy = useMemo(
     () => generateVisitCopy(form.purposeOfVisit, form.guidedDetails || {}, form),
@@ -171,6 +175,9 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
       programManagerEmail: planToConvert.programManagerEmail || currentUser?.email || '',
       purposeOfVisit: planToConvert.purposeOfVisit || '',
       visitDate: planToConvert.plannedDate ? new Date(planToConvert.plannedDate).toISOString().slice(0, 10) : '',
+      workMode: planToConvert.workMode || 'School Visit',
+      actualLocation: planToConvert.plannedLocation || planToConvert.city || '',
+      actualWorkDone: planToConvert.workPlanned || '',
       actionItems: planToConvert.workPlanned || '',
       remarks: planToConvert.planningNotes || '',
       nextVisitDate: '',
@@ -194,7 +201,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
   }, [schools, form.state]);
 
   useEffect(() => {
-    if (isNewSchool) return;
+    if (!isSchoolVisitMode || isNewSchool) return;
 
     const selected = schools.find(
       (school) => school.state === form.state && school.schoolName === form.schoolName
@@ -211,7 +218,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
       schoolEmail: selected.email || '',
       course: selected.course || ''
     }));
-  }, [form.state, form.schoolName, schools, isNewSchool]);
+  }, [form.state, form.schoolName, schools, isNewSchool, isSchoolVisitMode]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -237,8 +244,25 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
       return;
     }
 
+    if (name === 'workMode') {
+      setForm((prev) => ({
+        ...prev,
+        workMode: value,
+        isNewSchool: value === 'School Visit' ? prev.isNewSchool : 'false',
+        state: value === 'School Visit' ? prev.state : '',
+        schoolName: value === 'School Visit' ? prev.schoolName : '',
+        city: value === 'School Visit' ? prev.city : '',
+        pointOfContact: value === 'School Visit' ? prev.pointOfContact : '',
+        designation: value === 'School Visit' ? prev.designation : '',
+        contactNo: value === 'School Visit' ? prev.contactNo : '',
+        schoolEmail: value === 'School Visit' ? prev.schoolEmail : '',
+        course: value === 'School Visit' ? prev.course : '',
+      }));
+      return;
+    }
+
     if (name === 'state') {
-      if (isNewSchool) {
+      if (!isSchoolVisitMode || isNewSchool) {
         setForm((prev) => ({ ...prev, state: value }));
         return;
       }
@@ -286,18 +310,18 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
     const nextErrors = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!form.state) nextErrors.state = 'State is required.';
-    if (!form.schoolName) nextErrors.schoolName = 'School name is required.';
-    if (!isNewSchool && hasSchoolMaster && form.state && form.schoolName) {
+    if (isSchoolVisitMode && !form.state) nextErrors.state = 'State is required.';
+    if (!form.schoolName) nextErrors.schoolName = isSchoolVisitMode ? 'School name is required.' : 'Work item is required.';
+    if (isSchoolVisitMode && !isNewSchool && hasSchoolMaster && form.state && form.schoolName) {
       const selectedExists = schools.some(
         (school) => school.state === form.state && school.schoolName === form.schoolName
       );
       if (!selectedExists) nextErrors.schoolName = 'Select a school from the master list or use School not listed.';
     }
-    if (isNewSchool && !form.city) nextErrors.city = 'City is required for new school.';
-    if (isNewSchool && !form.pointOfContact) nextErrors.pointOfContact = 'Point of contact is required for new school.';
-    if (isNewSchool && !form.contactNo) nextErrors.contactNo = 'Contact number is required for new school.';
-    if (!form.schoolEmail || !emailRegex.test(form.schoolEmail)) {
+    if (isSchoolVisitMode && isNewSchool && !form.city) nextErrors.city = 'City is required for new school.';
+    if (isSchoolVisitMode && isNewSchool && !form.pointOfContact) nextErrors.pointOfContact = 'Point of contact is required for new school.';
+    if (isSchoolVisitMode && isNewSchool && !form.contactNo) nextErrors.contactNo = 'Contact number is required for new school.';
+    if (isSchoolVisitMode && (!form.schoolEmail || !emailRegex.test(form.schoolEmail))) {
       nextErrors.schoolEmail = 'Valid school email is required.';
     }
     if (!form.programManagerName) nextErrors.programManagerName = 'Sender name is required.';
@@ -306,6 +330,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
     }
     if (!form.purposeOfVisit) nextErrors.purposeOfVisit = 'Purpose is required.';
     if (!form.visitDate) nextErrors.visitDate = 'Visit date is required.';
+    if (!String(form.actualWorkDone || '').trim()) nextErrors.actualWorkDone = 'Actual work done is required.';
 
     if (!useManualReportText && purposeGuide) {
       purposeGuide.fields.forEach(([key, label], index) => {
@@ -472,36 +497,42 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
           <div className="flow-heading">
             <span>1</span>
             <div>
-              <h3>Select school</h3>
-              <p>Use master data for existing schools, or switch to new school mode for sales visits.</p>
+              <h3>{isSchoolVisitMode ? 'Select school' : 'Work context'}</h3>
+              <p>
+                {isSchoolVisitMode
+                  ? 'Use master data for existing schools, or switch to new school mode for sales visits.'
+                  : 'Capture the internal work context without forcing school-specific details.'}
+              </p>
             </div>
           </div>
-          <div className="mode-toggle full-width">
-            <label className={!isNewSchool ? 'active' : ''}>
-              <input
-                type="radio"
-                name="isNewSchool"
-                value="false"
-                checked={!isNewSchool}
-                onChange={handleChange}
-              />
-              Existing school
-            </label>
-            <label className={isNewSchool ? 'active' : ''}>
-              <input
-                type="radio"
-                name="isNewSchool"
-                value="true"
-                checked={isNewSchool}
-                onChange={handleChange}
-              />
-              School not listed
-            </label>
-          </div>
+          {isSchoolVisitMode && (
+            <div className="mode-toggle full-width">
+              <label className={!isNewSchool ? 'active' : ''}>
+                <input
+                  type="radio"
+                  name="isNewSchool"
+                  value="false"
+                  checked={!isNewSchool}
+                  onChange={handleChange}
+                />
+                Existing school
+              </label>
+              <label className={isNewSchool ? 'active' : ''}>
+                <input
+                  type="radio"
+                  name="isNewSchool"
+                  value="true"
+                  checked={isNewSchool}
+                  onChange={handleChange}
+                />
+                School not listed
+              </label>
+            </div>
+          )}
           <div className="form-grid">
             <label>
-              State
-              {hasSchoolMaster && !isNewSchool ? (
+              {isSchoolVisitMode ? 'State' : 'Region / Team'}
+              {isSchoolVisitMode && hasSchoolMaster && !isNewSchool ? (
                 <select name="state" value={form.state} onChange={handleChange} required>
                   <option value="">Select state</option>
                   {states.map((state) => (
@@ -511,14 +542,14 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
                   ))}
                 </select>
               ) : (
-                <input name="state" value={form.state} onChange={handleChange} required />
+                <input name="state" value={form.state} onChange={handleChange} required={isSchoolVisitMode} />
               )}
               {renderError('state')}
             </label>
 
             <label>
-              School Name
-              {hasSchoolMaster && !isNewSchool ? (
+              {isSchoolVisitMode ? 'School Name' : 'Work Item / Account'}
+              {isSchoolVisitMode && hasSchoolMaster && !isNewSchool ? (
                 <>
                   <input
                     name="schoolName"
@@ -535,7 +566,13 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
                   </datalist>
                 </>
               ) : (
-                <input name="schoolName" value={form.schoolName} onChange={handleChange} required />
+                <input
+                  name="schoolName"
+                  value={form.schoolName}
+                  onChange={handleChange}
+                  required
+                  placeholder={isSchoolVisitMode ? '' : 'Internal review, lesson planning, call follow-up, content prep'}
+                />
               )}
               {renderError('schoolName')}
             </label>
@@ -544,52 +581,52 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
 
         <section className="school-profile">
           <div className="school-profile-header">
-            <span>School profile</span>
-            <strong>{form.schoolName || (isNewSchool ? 'New school details' : 'No school selected')}</strong>
+            <span>{isSchoolVisitMode ? 'School profile' : 'Work profile'}</span>
+            <strong>{form.schoolName || (isSchoolVisitMode ? (isNewSchool ? 'New school details' : 'No school selected') : 'No work item added')}</strong>
           </div>
-          {isNewSchool && (
+          {isSchoolVisitMode && isNewSchool && (
             <div className="help-text prospect-note">
               This report will be saved as a new/prospect school visit. Add it to the master sheet later once confirmed.
             </div>
           )}
           <div className="profile-grid">
             <label>
-              City
-              <input name="city" value={form.city} onChange={handleChange} readOnly={hasSchoolMaster && !isNewSchool} required={isNewSchool} />
+              {isSchoolVisitMode ? 'City' : 'Base Location'}
+              <input name="city" value={form.city} onChange={handleChange} readOnly={isSchoolVisitMode && hasSchoolMaster && !isNewSchool} required={isSchoolVisitMode && isNewSchool} />
               {renderError('city')}
             </label>
 
             <label>
-              Point of Contact
-              <input name="pointOfContact" value={form.pointOfContact} onChange={handleChange} readOnly={hasSchoolMaster && !isNewSchool} required={isNewSchool} />
+              {isSchoolVisitMode ? 'Point of Contact' : 'Stakeholder / Contact'}
+              <input name="pointOfContact" value={form.pointOfContact} onChange={handleChange} readOnly={isSchoolVisitMode && hasSchoolMaster && !isNewSchool} required={isSchoolVisitMode && isNewSchool} />
               {renderError('pointOfContact')}
             </label>
 
             <label>
-              Designation
-              <input name="designation" value={form.designation} onChange={handleChange} readOnly={hasSchoolMaster && !isNewSchool} />
+              {isSchoolVisitMode ? 'Designation' : 'Role / Function'}
+              <input name="designation" value={form.designation} onChange={handleChange} readOnly={isSchoolVisitMode && hasSchoolMaster && !isNewSchool} />
             </label>
 
             <label>
-              Contact No
-              <input name="contactNo" value={form.contactNo} onChange={handleChange} readOnly={hasSchoolMaster && !isNewSchool} required={isNewSchool} />
+              {isSchoolVisitMode ? 'Contact No' : 'Contact Number'}
+              <input name="contactNo" value={form.contactNo} onChange={handleChange} readOnly={isSchoolVisitMode && hasSchoolMaster && !isNewSchool} required={isSchoolVisitMode && isNewSchool} />
               {renderError('contactNo')}
             </label>
 
             <label>
-              School Email
-              <input name="schoolEmail" type="email" value={form.schoolEmail} onChange={handleChange} required />
+              {isSchoolVisitMode ? 'School Email' : 'Work Email / Optional Recipient'}
+              <input name="schoolEmail" type="email" value={form.schoolEmail} onChange={handleChange} required={isSchoolVisitMode} />
               {renderError('schoolEmail')}
-              {emailWarning && !errors.schoolEmail && <span className="field-warning">{emailWarning}</span>}
+              {isSchoolVisitMode && emailWarning && !errors.schoolEmail && <span className="field-warning">{emailWarning}</span>}
             </label>
 
             <label>
-              Course
+              {isSchoolVisitMode ? 'Course' : 'Program / Focus Area'}
               <input
                 name="course"
                 value={form.course}
                 onChange={handleChange}
-                readOnly={hasSchoolMaster && !isNewSchool}
+                readOnly={isSchoolVisitMode && hasSchoolMaster && !isNewSchool}
                 placeholder={isNewSchool ? 'Interested course/program' : ''}
               />
             </label>
@@ -600,8 +637,12 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
           <div className="flow-heading">
             <span>2</span>
             <div>
-              <h3>Visit details</h3>
-              <p>Add the visit purpose, summary, action items, and supporting evidence.</p>
+              <h3>{isSchoolVisitMode ? 'Visit details' : 'Work details'}</h3>
+              <p>
+                {isSchoolVisitMode
+                  ? 'Add the visit purpose, summary, action items, and supporting evidence.'
+                  : 'Add the internal work completed, summary, follow-up, and supporting evidence if any.'}
+              </p>
             </div>
           </div>
           <div className="form-grid">
@@ -624,7 +665,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
             </label>
 
             <label>
-              Purpose of Visit
+              {isSchoolVisitMode ? 'Purpose of Visit' : 'Work Category'}
               <select name="purposeOfVisit" value={form.purposeOfVisit} onChange={handleChange} required>
                 <option value="">Select purpose</option>
                 {PURPOSES.map((purpose) => (
@@ -640,6 +681,40 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
               Visit Date
               <input name="visitDate" type="date" value={form.visitDate} onChange={handleChange} required />
               {renderError('visitDate')}
+            </label>
+
+            <label>
+              Work Mode
+              <select name="workMode" value={form.workMode} onChange={handleChange}>
+                <option>School Visit</option>
+                <option>Work From Home</option>
+                <option>Work From Office</option>
+                <option>Travel</option>
+                <option>Other</option>
+              </select>
+            </label>
+
+            <label>
+              Actual Location
+              <input
+                name="actualLocation"
+                value={form.actualLocation}
+                onChange={handleChange}
+                placeholder="School / Home / Office / City"
+              />
+            </label>
+
+            <label className="full-width">
+              Actual Work Done
+              <textarea
+                name="actualWorkDone"
+                value={form.actualWorkDone}
+                onChange={handleChange}
+                placeholder="What exactly was completed today by the PM?"
+                rows="4"
+                required
+              />
+              {renderError('actualWorkDone')}
             </label>
 
             {purposeGuide && (
@@ -806,18 +881,18 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
             <div className="preview-grid">
               <div>
                 <span>To</span>
-                <strong>{form.schoolEmail}</strong>
+                <strong>{form.schoolEmail || 'Internal log only'}</strong>
               </div>
               <div>
                 <span>Reply-to</span>
                 <strong>{form.programManagerEmail}</strong>
               </div>
               <div>
-                <span>School</span>
+                <span>{isSchoolVisitMode ? 'School' : 'Work Item'}</span>
                 <strong>{form.schoolName} {isNewSchool ? '(New / Prospect)' : ''}</strong>
               </div>
               <div>
-                <span>Purpose</span>
+                <span>{isSchoolVisitMode ? 'Purpose' : 'Category'}</span>
                 <strong>{form.purposeOfVisit}</strong>
               </div>
               <div>
@@ -825,11 +900,21 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
                 <strong>{form.visitDate}</strong>
               </div>
               <div>
+                <span>Work Mode</span>
+                <strong>{form.workMode || 'School Visit'}</strong>
+              </div>
+              <div>
+                <span>Location</span>
+                <strong>{form.actualLocation || 'Not added'}</strong>
+              </div>
+              <div>
                 <span>CC</span>
                 <strong>{form.ccEmails || 'No additional CC'}</strong>
               </div>
             </div>
             <div className="preview-copy">
+              <h3>Actual Work Done</h3>
+              <p>{form.actualWorkDone}</p>
               <h3>Session Summary</h3>
               <p>{effectiveSessionSummary}</p>
               <h3>Action Items</h3>

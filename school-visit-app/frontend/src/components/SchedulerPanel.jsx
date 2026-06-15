@@ -32,6 +32,8 @@ const emptyForm = (currentUser = {}) => ({
   planningNotes: "",
   programManagerName: currentUser?.name || "",
   programManagerEmail: currentUser?.email || "",
+  workMode: "School Visit",
+  plannedLocation: "",
 });
 
 export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onConvertToReport }) {
@@ -60,6 +62,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
 
   const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
+  const isSchoolVisitMode = form.workMode === "School Visit";
 
   useEffect(() => {
     setForm((prev) => ({
@@ -82,6 +85,8 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
   );
 
   useEffect(() => {
+    if (form.workMode !== "School Visit") return;
+
     const selected = schools.find(
       (school) => school.state === form.state && school.schoolName === form.schoolName
     );
@@ -116,6 +121,11 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
     const { name, value } = event.target;
 
     if (name === "state") {
+      if (form.workMode !== "School Visit") {
+        setForm((prev) => ({ ...prev, state: value }));
+        return;
+      }
+
       setForm((prev) => ({
         ...prev,
         state: value,
@@ -125,6 +135,21 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
         contactNo: "",
         schoolEmail: "",
         course: "",
+      }));
+      return;
+    }
+
+    if (name === "workMode") {
+      setForm((prev) => ({
+        ...prev,
+        workMode: value,
+        state: value === "School Visit" ? prev.state : "",
+        schoolName: value === "School Visit" ? prev.schoolName : "",
+        city: value === "School Visit" ? prev.city : "",
+        pointOfContact: value === "School Visit" ? prev.pointOfContact : "",
+        contactNo: value === "School Visit" ? prev.contactNo : "",
+        schoolEmail: value === "School Visit" ? prev.schoolEmail : "",
+        course: value === "School Visit" ? prev.course : "",
       }));
       return;
     }
@@ -290,34 +315,57 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
             <div className="flow-heading">
               <span>1</span>
               <div>
-                <h3>School and owner</h3>
-                <p>Pick the school, then lock in the PM, purpose, and date.</p>
+                <h3>{isSchoolVisitMode ? "School and owner" : "Work context and owner"}</h3>
+                <p>
+                  {isSchoolVisitMode
+                    ? "Pick the school, then lock in the PM, purpose, and date."
+                    : "Capture the work context, owner, and the internal task being planned."}
+                </p>
               </div>
             </div>
 
             <div className="form-grid">
               <label>
-                State
-                <select name="state" value={form.state} onChange={handleChange} required>
-                  <option value="">Select state</option>
-                  {states.map((state) => (
-                    <option key={state} value={state}>
-                      {state}
-                    </option>
-                  ))}
-                </select>
+                {isSchoolVisitMode ? "State" : "Region / Team"}
+                {isSchoolVisitMode ? (
+                  <select name="state" value={form.state} onChange={handleChange} required>
+                    <option value="">Select state</option>
+                    {states.map((state) => (
+                      <option key={state} value={state}>
+                        {state}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    name="state"
+                    value={form.state}
+                    onChange={handleChange}
+                    placeholder="Optional region, team, or business unit"
+                  />
+                )}
               </label>
 
               <label>
-                School
-                <select name="schoolName" value={form.schoolName} onChange={handleChange} required disabled={!form.state}>
-                  <option value="">Select school</option>
-                  {filteredSchools.map((school) => (
-                    <option key={`${school.state}-${school.schoolName}`} value={school.schoolName}>
-                      {school.schoolName}
-                    </option>
-                  ))}
-                </select>
+                {isSchoolVisitMode ? "School" : "Work Item / Account"}
+                {isSchoolVisitMode ? (
+                  <select name="schoolName" value={form.schoolName} onChange={handleChange} required disabled={!form.state}>
+                    <option value="">Select school</option>
+                    {filteredSchools.map((school) => (
+                      <option key={`${school.state}-${school.schoolName}`} value={school.schoolName}>
+                        {school.schoolName}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    name="schoolName"
+                    value={form.schoolName}
+                    onChange={handleChange}
+                    placeholder="Proposal prep, lesson planning, follow-up calls, internal review..."
+                    required
+                  />
+                )}
               </label>
 
               <label>
@@ -350,13 +398,34 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
               )}
 
               <label>
-                Purpose of Visit
+                {isSchoolVisitMode ? "Purpose of Visit" : "Work Category"}
                 <input
                   name="purposeOfVisit"
                   value={form.purposeOfVisit}
                   onChange={handleChange}
-                  placeholder="Teachers Training / Demo / Review"
+                  placeholder={isSchoolVisitMode ? "Teachers Training / Demo / Review" : "Planning / Follow-up / Proposal / Review"}
                   required
+                />
+              </label>
+
+              <label>
+                Work Mode
+                <select name="workMode" value={form.workMode} onChange={handleChange}>
+                  <option>School Visit</option>
+                  <option>Work From Home</option>
+                  <option>Work From Office</option>
+                  <option>Travel</option>
+                  <option>Other</option>
+                </select>
+              </label>
+
+              <label>
+                {isSchoolVisitMode ? "Planned Location" : "Work Location"}
+                <input
+                  name="plannedLocation"
+                  value={form.plannedLocation}
+                  onChange={handleChange}
+                  placeholder="School / Home / Office / City"
                 />
               </label>
 
@@ -633,6 +702,8 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                         <span>
                           {plan.plannedStartTime || "--"} to {plan.plannedEndTime || "--"}
                         </span>
+                        <span>{plan.workMode || "School Visit"}</span>
+                        <span>{plan.plannedLocation || "Location not added"}</span>
                       </div>
 
                       <div className="plan-copy-block">
@@ -644,6 +715,13 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                         <div className="plan-copy-block plan-copy-block-notes">
                           <span className="eyebrow">Planning Notes</span>
                           <p>{plan.planningNotes}</p>
+                        </div>
+                      )}
+
+                      {plan.actualWorkDone && (
+                        <div className="plan-copy-block">
+                          <span className="eyebrow">Actual Work Done</span>
+                          <p>{plan.actualWorkDone}</p>
                         </div>
                       )}
 

@@ -50,6 +50,8 @@ export function buildReportHtml(data) {
             ${buildSnapshotRow("Course / Program", data.course || "-")}
             ${buildSnapshotRow("Program Manager", data.programManagerName)}
             ${buildSnapshotRow("Purpose of Visit", data.purposeOfVisit)}
+            ${buildSnapshotRow("Work Mode", data.workMode || "School Visit")}
+            ${buildSnapshotRow("Work Location", data.actualLocation || "-")}
             ${buildSnapshotRow("Date of Visit", visitDateText)}
             ${buildSnapshotRow("Next Planned Follow-up", nextVisitText)}
           </table>
@@ -59,6 +61,13 @@ export function buildReportHtml(data) {
           <div style="font-weight:700; color:#173723; margin-bottom:6px;">Visit Objective</div>
           <div style="background:#f7fbf9; border:1px solid #d7e7df; border-radius:10px; padding:12px 14px;">
             ${escapeHtml(content.objective)}
+          </div>
+        </div>
+
+        <div style="margin:18px 0;">
+          <div style="font-weight:700; color:#7b4f13; margin-bottom:6px;">Actual Work Done</div>
+          <div style="background:#fffaf0; border:1px solid #ecd9b4; border-radius:10px; padding:12px 14px;">
+            ${nl2br(escapeHtml(data.actualWorkDone || "-"))}
           </div>
         </div>
 

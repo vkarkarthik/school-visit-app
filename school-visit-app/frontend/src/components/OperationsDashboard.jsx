@@ -459,16 +459,18 @@ function ReportCardGrid({ reports = [], emptyText, onPreview }) {
                 {new Date(report.visitDate).toLocaleDateString('en-IN')} | {report.purposeOfVisit}
               </span>
             </div>
-            <span className={`status-pill ${report.emailStatus === 'Sent' ? 'sent' : 'failed'}`}>{report.emailStatus}</span>
+            <span className={`status-pill ${report.emailStatus === 'Sent' ? 'sent' : report.emailStatus === 'Not Required' ? 'info' : 'failed'}`}>{report.emailStatus}</span>
           </div>
 
           <div className="report-card-meta">
             <span>{report.programManagerName}</span>
             <span>{report.state || 'State pending'}</span>
+            <span>{report.workMode || 'School Visit'}</span>
             <span>{report.pointOfContact || 'POC pending'}</span>
             <span>{report.nextVisitDate ? `Next: ${new Date(report.nextVisitDate).toLocaleDateString('en-IN')}` : 'No next follow-up'}</span>
           </div>
 
+          {report.actualWorkDone && <p>{truncateText(report.actualWorkDone, 160)}</p>}
           <p>{truncateText(report.sessionSummary || 'No summary available yet.', 180)}</p>
 
           <div className="row-actions">
@@ -494,6 +496,7 @@ function PlanList({ plans = [], emptyText, action }) {
             <span>
               {new Date(plan.plannedDate).toLocaleDateString('en-IN')} | {plan.purposeOfVisit} | {plan.programManagerName}
             </span>
+            <span>{plan.workMode || 'School Visit'}{plan.plannedLocation ? ` | ${plan.plannedLocation}` : ''}</span>
             <span>{plan.workPlanned || 'Work plan not added'}</span>
             {plan.planningNotes && <span>Notes: {plan.planningNotes}</span>}
           </div>
@@ -573,12 +576,24 @@ function ReportPreviewModal({ report, onClose }) {
             <span>{report.emailStatus || '-'}</span>
           </div>
           <div>
+            <strong>Work Mode</strong>
+            <span>{report.workMode || '-'}</span>
+          </div>
+          <div>
+            <strong>Location</strong>
+            <span>{report.actualLocation || '-'}</span>
+          </div>
+          <div>
             <strong>Next Follow-up</strong>
             <span>{report.nextVisitDate ? new Date(report.nextVisitDate).toLocaleDateString('en-IN') : '-'}</span>
           </div>
         </div>
 
         <div className="preview-copy-grid">
+          <div className="preview-copy-card">
+            <strong>Actual Work Done</strong>
+            <p>{report.actualWorkDone || 'No actual work details recorded.'}</p>
+          </div>
           <div className="preview-copy-card">
             <strong>Session Summary</strong>
             <p>{report.sessionSummary || 'No summary available.'}</p>

@@ -42,6 +42,13 @@ const VisitReportSchema = new mongoose.Schema(
     purposeOfVisit: { type: String, required: true },
     visitDate: { type: Date, required: true, index: true },
     sourcePlanId: { type: mongoose.Schema.Types.ObjectId, ref: "VisitPlan", index: true },
+    workMode: {
+      type: String,
+      enum: ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"],
+      default: "School Visit",
+    },
+    actualLocation: String,
+    actualWorkDone: { type: String, required: true },
     sessionSummary: { type: String, required: true },
     actionItems: String,
     actionItemsDetailed: [ActionItemSchema],
@@ -79,7 +86,7 @@ const VisitReportSchema = new mongoose.Schema(
     resendCount: { type: Number, default: 0 },
     emailStatus: {
       type: String,
-      enum: ['Sent', 'Failed'],
+      enum: ['Sent', 'Failed', 'Not Required'],
       default: 'Sent'
     },
     year: { type: Number, required: true, index: true }

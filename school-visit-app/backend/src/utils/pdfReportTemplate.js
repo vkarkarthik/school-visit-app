@@ -324,6 +324,14 @@ export function buildPdfReportHtml(data) {
               <td>${escapeHtml(data.purposeOfVisit)}</td>
             </tr>
             <tr>
+              <td class="label-cell">Work Mode</td>
+              <td>${escapeHtml(data.workMode || "School Visit")}</td>
+            </tr>
+            <tr>
+              <td class="label-cell">Work Location</td>
+              <td>${escapeHtml(data.actualLocation || "-")}</td>
+            </tr>
+            <tr>
               <td class="label-cell">Visit Date</td>
               <td>${escapeHtml(visitDateText)}</td>
             </tr>
@@ -336,27 +344,32 @@ export function buildPdfReportHtml(data) {
         </div>
 
         <div class="section">
-          <div class="section-title">3. Detailed Session Record</div>
+          <div class="section-title">3. Actual Work Done</div>
+          <div class="content-box">${escapeHtml(data.actualWorkDone || "-")}</div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">4. Detailed Session Record</div>
           <div class="content-box summary-box">${escapeHtml(data.sessionSummary || "-")}</div>
         </div>
 
         <div class="section">
-          <div class="section-title">4. Follow-up Plan / Next Steps</div>
+          <div class="section-title">5. Follow-up Plan / Next Steps</div>
           <div class="content-box">${escapeHtml(data.actionItems || "No action items noted.")}</div>
         </div>
 
         <div class="section">
-          <div class="section-title">5. Next Visit / Follow-up Schedule</div>
+          <div class="section-title">6. Next Visit / Follow-up Schedule</div>
           <div class="content-box">${escapeHtml(nextVisitText)}</div>
         </div>
 
         <div class="section">
-          <div class="section-title">6. Additional Remarks</div>
+          <div class="section-title">7. Additional Remarks</div>
           <div class="content-box">${escapeHtml(data.remarks || "No additional remarks.")}</div>
         </div>
 
         <div class="section">
-          <div class="section-title">7. Supporting Photos / Evidence</div>
+          <div class="section-title">8. Supporting Photos / Evidence</div>
           <div class="photos-wrapper">
             ${photosHtml}
           </div>

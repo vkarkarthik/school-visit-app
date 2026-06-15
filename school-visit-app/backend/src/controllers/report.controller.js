@@ -27,6 +27,12 @@ function parseEmailList(value) {
     .filter(Boolean);
 }
 
+function normalizeWorkMode(value) {
+  return ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"].includes(value)
+    ? value
+    : "School Visit";
+}
+
 function normalizeActionItemsDetailed(value, fallbackActionItems = "", fallbackOwner = "", fallbackDueDate = "") {
   const list = Array.isArray(value)
     ? value
@@ -122,6 +128,9 @@ export const createReportController = asyncHandler(async (req, res) => {
     ccEmails,
     purposeOfVisit,
     visitDate,
+    workMode,
+    actualLocation,
+    actualWorkDone,
     sessionSummary,
     actionItems,
     actionItemsDetailed,
@@ -130,25 +139,34 @@ export const createReportController = asyncHandler(async (req, res) => {
     sourcePlanId,
   } = req.body;
   const isNewSchoolVisit = isNewSchool === true || isNewSchool === "true";
+  const normalizedWorkMode = normalizeWorkMode(workMode);
+  const isSchoolVisitWork = normalizedWorkMode === "School Visit";
+  const normalizedState = String(state || (isSchoolVisitWork ? "" : "Internal")).trim();
+  const normalizedSchoolName = String(
+    schoolName || (isSchoolVisitWork ? "" : actualLocation || purposeOfVisit || "Internal Work")
+  ).trim();
+  const normalizedSchoolEmail = String(schoolEmail || "").trim();
 
   if (
-    !state ||
-    !schoolName ||
-    !schoolEmail ||
     !programManagerName ||
     !programManagerEmail ||
     !purposeOfVisit ||
     !visitDate ||
+    !actualWorkDone ||
     !sessionSummary
   ) {
     throw new AppError("Missing required fields.", 400);
   }
 
-  if (isNewSchoolVisit && (!city || !pointOfContact || !contactNo)) {
+  if (isSchoolVisitWork && (!normalizedState || !normalizedSchoolName || !normalizedSchoolEmail)) {
+    throw new AppError("State, school name, and school email are required for school visit reports.", 400);
+  }
+
+  if (isSchoolVisitWork && isNewSchoolVisit && (!city || !pointOfContact || !contactNo)) {
     throw new AppError("City, point of contact, and contact number are required for new school visits.", 400);
   }
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(schoolEmail)) {
+  if (normalizedSchoolEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedSchoolEmail)) {
     throw new AppError("School email is not valid.", 400);
   }
 
@@ -169,7 +187,7 @@ export const createReportController = asyncHandler(async (req, res) => {
     console.log("STEP 1: Starting report creation");
     const { start, end } = buildVisitDateBounds(visitDate);
     const duplicateReport = await VisitReport.findOne({
-      schoolName,
+      schoolName: normalizedSchoolName,
       purposeOfVisit,
       visitDate: { $gte: start, $lt: end },
       reportStatus: { $ne: "Archived" },
@@ -192,20 +210,23 @@ export const createReportController = asyncHandler(async (req, res) => {
     );
 
     const payload = {
-      isNewSchool: isNewSchoolVisit,
-      state,
-      schoolName,
+      isNewSchool: isSchoolVisitWork ? isNewSchoolVisit : false,
+      state: normalizedState,
+      schoolName: normalizedSchoolName,
       city,
       pointOfContact,
       designation,
       contactNo,
-      schoolEmail,
+      schoolEmail: normalizedSchoolEmail,
       course,
       programManagerName,
       programManagerEmail,
       ccEmails,
       purposeOfVisit,
       visitDate,
+      workMode: normalizedWorkMode,
+      actualLocation,
+      actualWorkDone,
       sessionSummary,
       actionItems,
       actionItemsDetailed: normalizedActionItemsDetailed,
@@ -232,13 +253,16 @@ export const createReportController = asyncHandler(async (req, res) => {
     const pdfUrl = await savePdfArchive(pdfBuffer, schoolName, visitDate);
     console.log("STEP 5B DONE: PDF archive saved");
 
-    let emailStatus = "Sent";
-    let emailSentAt = new Date();
+    let emailStatus = isSchoolVisitWork ? "Sent" : "Not Required";
+    let emailSentAt = isSchoolVisitWork ? new Date() : undefined;
     let emailLastError = "";
     try {
+      if (!isSchoolVisitWork) {
+        console.log("STEP 6 SKIPPED: Internal work log, email not required");
+      } else {
       console.log("STEP 6: Sending email");
       await sendVisitReportEmail({
-        to: schoolEmail,
+        to: normalizedSchoolEmail,
         cc: ccEmails,
         replyTo: programManagerEmail,
         subject: emailSubject,
@@ -246,6 +270,7 @@ export const createReportController = asyncHandler(async (req, res) => {
         pdfBuffer,
       });
       console.log("STEP 6 DONE: Email sent");
+      }
     } catch (emailError) {
       console.error("STEP 6 FAILED: Email sending failed", emailError);
       emailStatus = "Failed";
@@ -269,12 +294,17 @@ export const createReportController = asyncHandler(async (req, res) => {
     if (sourcePlanId) {
       await VisitPlan.findByIdAndUpdate(sourcePlanId, {
         status: "Completed",
+        workMode: ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"].includes(workMode)
+          ? workMode
+          : "School Visit",
+        actualLocation,
+        actualWorkDone,
         convertedReportId: report._id,
         convertedAt: new Date(),
       });
     }
 
-    if (isNewSchoolVisit) {
+    if (isSchoolVisitWork && isNewSchoolVisit) {
       try {
         console.log("STEP 8: Appending new school to Google Sheet");
         await appendNewSchoolToSheet(report);
@@ -293,10 +323,14 @@ export const createReportController = asyncHandler(async (req, res) => {
     res.status(201).json({
       success: true,
       message: [
-        emailStatus === "Sent" ? "Report created and email sent." : "Report created but email failed.",
+        emailStatus === "Sent"
+          ? "Report created and email sent."
+          : emailStatus === "Not Required"
+            ? "Internal work log saved."
+            : "Report created but email failed.",
         emailStatus === "Failed" && emailLastError ? `Email error: ${emailLastError}` : "",
         duplicateReport ? "Possible duplicate visit found for the same school, date, and purpose." : "",
-        isNewSchoolVisit
+        isSchoolVisitWork && isNewSchoolVisit
           ? report.newSchoolSheetStatus === "Saved"
             ? "New school saved to Google Sheet."
             : "New school report saved, but Google Sheet append failed."
@@ -605,6 +639,9 @@ export const updateReportController = asyncHandler(async (req, res) => {
     "ccEmails",
     "programManagerName",
     "programManagerEmail",
+    "workMode",
+    "actualLocation",
+    "actualWorkDone",
     "sessionSummary",
     "actionItems",
     "actionItemsDetailed",
@@ -645,6 +682,10 @@ export const resendReportEmailController = asyncHandler(async (req, res) => {
   const report = await VisitReport.findById(req.params.id);
   if (!report) {
     throw new AppError("Report not found.", 404);
+  }
+
+  if (report.emailStatus === "Not Required" || report.workMode !== "School Visit") {
+    throw new AppError("Email resend is not required for internal work logs.", 400);
   }
 
   const payload = report.toObject();

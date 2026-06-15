@@ -8,6 +8,12 @@ function validateEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ""));
 }
 
+function normalizeWorkMode(value) {
+  return ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"].includes(value)
+    ? value
+    : "School Visit";
+}
+
 function buildListFilter(query, req) {
   const filter = {};
 
@@ -47,6 +53,8 @@ export const createPlanController = asyncHandler(async (req, res) => {
     programManagerName,
     programManagerEmail,
     purposeOfVisit,
+    workMode,
+    plannedLocation,
     workPlanned,
     plannedDate,
     plannedStartTime,
@@ -61,9 +69,19 @@ export const createPlanController = asyncHandler(async (req, res) => {
   const normalizedManagerName = req.isAdmin
     ? String(programManagerName || "").trim()
     : String(programManagerName || currentUserNameFromEmail(req.userEmail)).trim();
+  const normalizedWorkMode = normalizeWorkMode(workMode);
+  const isSchoolVisit = normalizedWorkMode === "School Visit";
+  const normalizedState = isSchoolVisit ? String(state || "").trim() : String(state || "Internal").trim();
+  const normalizedSchoolName = isSchoolVisit
+    ? String(schoolName || "").trim()
+    : String(schoolName || purposeOfVisit || "Internal Work").trim();
 
-  if (!state || !schoolName || !normalizedManagerName || !normalizedManagerEmail || !purposeOfVisit || !workPlanned || !plannedDate) {
+  if (!normalizedManagerName || !normalizedManagerEmail || !purposeOfVisit || !workPlanned || !plannedDate) {
     throw new AppError("Missing required planning fields.", 400);
+  }
+
+  if (isSchoolVisit && (!normalizedState || !normalizedSchoolName)) {
+    throw new AppError("State and school name are required for school visit plans.", 400);
   }
 
   if (!validateEmail(normalizedManagerEmail)) {
@@ -75,8 +93,8 @@ export const createPlanController = asyncHandler(async (req, res) => {
   }
 
   const plan = await VisitPlan.create({
-    state,
-    schoolName,
+    state: normalizedState,
+    schoolName: normalizedSchoolName,
     city,
     pointOfContact,
     contactNo,
@@ -85,6 +103,8 @@ export const createPlanController = asyncHandler(async (req, res) => {
     programManagerName: normalizedManagerName,
     programManagerEmail: normalizedManagerEmail,
     purposeOfVisit,
+    workMode: normalizedWorkMode,
+    plannedLocation,
     workPlanned,
     plannedDate,
     plannedStartTime,
