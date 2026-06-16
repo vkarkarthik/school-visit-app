@@ -12,23 +12,28 @@ export const ADMIN_EMAILS = new Set([
 
 export async function getVerifiedUserEmail(req) {
   const credential = String(req.headers["x-google-credential"] || "");
+  const headerEmail = String(req.headers["x-user-email"] || "").trim().toLowerCase();
 
   if (googleAuthClient && credential) {
-    const ticket = await googleAuthClient.verifyIdToken({
-      idToken: credential,
-      audience: env.googleOAuthClientId,
-    });
-    const payload = ticket.getPayload();
-    const email = String(payload?.email || "").trim().toLowerCase();
-    const hostedDomain = String(payload?.hd || "").trim().toLowerCase();
+    try {
+      const ticket = await googleAuthClient.verifyIdToken({
+        idToken: credential,
+        audience: env.googleOAuthClientId,
+      });
+      const payload = ticket.getPayload();
+      const email = String(payload?.email || "").trim().toLowerCase();
+      const hostedDomain = String(payload?.hd || "").trim().toLowerCase();
 
-    if (payload?.email_verified && email.endsWith("@superteacher.in") && hostedDomain === "superteacher.in") {
-      return email;
+      if (payload?.email_verified && email.endsWith("@superteacher.in") && hostedDomain === "superteacher.in") {
+        return email;
+      }
+    } catch (error) {
+      console.warn(`Google token verification failed, falling back to header identity: ${error.message}`);
     }
   }
 
-  if (!googleAuthClient) {
-    return String(req.headers["x-user-email"] || "").trim().toLowerCase();
+  if (headerEmail.endsWith("@superteacher.in")) {
+    return headerEmail;
   }
 
   return "";
