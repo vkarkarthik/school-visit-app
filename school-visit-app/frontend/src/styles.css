@@ -1803,6 +1803,31 @@ tbody tr:last-child td {
   box-shadow: 0 6px 18px rgba(22, 34, 51, 0.05);
 }
 
+.metric-card-button,
+.ops-spotlight-card-button,
+.rank-row-button,
+.ops-pm-card-button {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.metric-card-button:hover,
+.ops-spotlight-card-button:hover,
+.rank-row-button:hover,
+.ops-pm-card-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(22, 34, 51, 0.08);
+}
+
+.metric-card-button,
+.ops-spotlight-card-button,
+.rank-row-button {
+  width: 100%;
+  border: 1px solid var(--line);
+}
+
 .metric-card.green {
   background: var(--green-soft);
 }
@@ -1924,8 +1949,28 @@ tbody tr:last-child td {
   background: var(--surface-soft);
 }
 
+.rank-row-button {
+  background: var(--surface-soft);
+}
+
 .report-row {
   align-items: center;
+}
+
+.inline-link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inline-link-button strong {
+  color: #173723;
+}
+
+.inline-link-button:hover strong {
+  color: var(--brand-dark);
 }
 
 .report-row strong {
@@ -2134,6 +2179,10 @@ tbody tr:last-child td {
   border-radius: 10px;
   padding: 12px;
   background: var(--surface-soft);
+}
+
+.ops-pm-card-button {
+  width: 100%;
 }
 
 .ops-pm-card.warning {

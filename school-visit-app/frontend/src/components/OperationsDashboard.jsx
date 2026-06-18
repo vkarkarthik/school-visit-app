@@ -66,6 +66,38 @@ export default function OperationsDashboard() {
     return matchesSearch && matchesManager && matchesPurpose && matchesStatus;
   });
 
+  const openReportsBoard = (nextFilters = {}, note = '') => {
+    setActiveBoard('reports');
+    setReportFilters((prev) => ({
+      ...prev,
+      ...nextFilters,
+    }));
+    if (note) {
+      setMessage(note);
+    }
+  };
+
+  const openPlannerBoard = (note = '') => {
+    setActiveBoard('planner');
+    if (note) {
+      setMessage(note);
+    }
+  };
+
+  const openPipelineBoard = (note = '') => {
+    setActiveBoard('pipeline');
+    if (note) {
+      setMessage(note);
+    }
+  };
+
+  const openOverviewBoard = (note = '') => {
+    setActiveBoard('overview');
+    if (note) {
+      setMessage(note);
+    }
+  };
+
   return (
     <section className="ops-dashboard">
       <div className="panel dashboard-hero">
@@ -86,12 +118,12 @@ export default function OperationsDashboard() {
       {!loading && dashboard && (
         <>
           <div className="dashboard-stats dashboard-stats-compact">
-            <Metric label="Sent" value={summary.sentReports} tone="green" />
-            <Metric label="At Risk" value={spotlight.risk} tone="red" />
-            <Metric label="Pending Actions" value={summary.pendingActionItems} tone="yellow" />
-            <Metric label="PMs Active" value={summary.activeManagers} tone="blue" />
-            <Metric label="Open Plans" value={(dailyOperations.totals?.todayPlans || 0) + (dailyOperations.nextThirtyDaysOpen || 0)} />
-            <Metric label="Overdue Follow-ups" value={summary.overdueFollowUps} tone="red" />
+            <Metric label="Sent" value={summary.sentReports} tone="green" onClick={() => openReportsBoard({ status: 'Sent' }, 'Showing sent reports.')} />
+            <Metric label="At Risk" value={spotlight.risk} tone="red" onClick={() => openPlannerBoard('Showing planner risk desk.')} />
+            <Metric label="Pending Actions" value={summary.pendingActionItems} tone="yellow" onClick={() => openPipelineBoard('Showing pipeline items that need action.')} />
+            <Metric label="PMs Active" value={summary.activeManagers} tone="blue" onClick={() => openPlannerBoard('Showing active PM day board.')} />
+            <Metric label="Open Plans" value={(dailyOperations.totals?.todayPlans || 0) + (dailyOperations.nextThirtyDaysOpen || 0)} onClick={() => openPlannerBoard('Showing open planner board items.')} />
+            <Metric label="Overdue Follow-ups" value={summary.overdueFollowUps} tone="red" onClick={() => openPipelineBoard('Showing follow-up pipeline.')} />
           </div>
 
           <div className="ops-spotlight-grid">
@@ -100,18 +132,21 @@ export default function OperationsDashboard() {
               tone="red"
               value={spotlight.risk}
               note={`${dailyOperations.totals?.blocked || 0} blocked, ${dailyOperations.totals?.closurePending || 0} pending closure, ${summary.failedReports || 0} failed emails`}
+              onClick={() => openPlannerBoard('Showing planner risk desk.')}
             />
             <SpotlightCard
               title="Delivery Momentum"
               tone="green"
               value={spotlight.momentum}
               note={`${summary.sentReports || 0} reports sent and ${summary.convertedPlans || 0} plans converted`}
+              onClick={() => openReportsBoard({ status: 'Sent' }, 'Showing sent delivery reports.')}
             />
             <SpotlightCard
               title="Follow-up Queue"
               tone="yellow"
               value={spotlight.queue}
               note={`${summary.pendingActionItems || 0} action items and ${summary.pendingNewSchools || 0} pending leads`}
+              onClick={() => openPipelineBoard('Showing follow-up queue.')}
             />
           </div>
 
@@ -142,6 +177,7 @@ export default function OperationsDashboard() {
               <RankList
                 items={dashboard.byManager}
                 emptyText="No manager data yet."
+                onItemClick={(item) => openReportsBoard({ manager: item.name || '' }, `Showing reports for ${item.name || 'the selected manager'}.`)}
                 render={(item) => (
                   <>
                     <span>{item.name || 'Unknown'}</span>
@@ -155,6 +191,7 @@ export default function OperationsDashboard() {
               <RankList
                 items={dashboard.byPurpose}
                 emptyText="No purpose data yet."
+                onItemClick={(item) => openReportsBoard({ purpose: item.purpose || '' }, `Showing ${item.purpose || 'selected'} reports.`)}
                 render={(item) => (
                   <>
                     <span>{item.purpose}</span>
@@ -193,7 +230,11 @@ export default function OperationsDashboard() {
             </Panel>
 
             <Panel title="What Needs Action Next">
-              <ActionList items={(dashboard.pendingActionItems || []).slice(0, 5)} emptyText="No pending action items." />
+              <ActionList
+                items={(dashboard.pendingActionItems || []).slice(0, 5)}
+                emptyText="No pending action items."
+                onItemClick={() => openPipelineBoard('Showing pending action queue.')}
+              />
             </Panel>
           </div>
 
@@ -202,6 +243,7 @@ export default function OperationsDashboard() {
               <PlanList
                 plans={dashboard.upcomingPlans}
                 emptyText="No upcoming plans."
+                onOpen={(plan) => openPlannerBoard(`Showing planner board for ${plan.programManagerName || 'the selected PM'}.`)}
                 action={(plan) => (
                   <button type="button" className="table-action" onClick={() => sendPlanReminder(plan._id)}>
                     Remind
@@ -214,6 +256,7 @@ export default function OperationsDashboard() {
               <ReportList
                 reports={dashboard.upcomingFollowUps}
                 emptyText="No upcoming follow-ups."
+                onOpen={openPreview}
                 action={(report) => (
                   <div className="row-actions">
                     <span className="status-pill sent">
@@ -263,7 +306,12 @@ export default function OperationsDashboard() {
                     </div>
                     <div className="ops-pm-board">
                       {(dailyOperations.pmDayBoard || []).map((manager) => (
-                        <article key={manager.key} className={`ops-pm-card ${manager.blocked ? 'risk' : manager.overloaded ? 'warning' : ''}`}>
+                        <button
+                          key={manager.key}
+                          type="button"
+                          className={`ops-pm-card ops-pm-card-button ${manager.blocked ? 'risk' : manager.overloaded ? 'warning' : ''}`}
+                          onClick={() => openReportsBoard({ manager: manager.name || '' }, `Showing reports for ${manager.name || 'the selected PM'}.`)}
+                        >
                           <div className="ops-pm-card-top">
                             <div>
                               <strong>{manager.name}</strong>
@@ -283,7 +331,7 @@ export default function OperationsDashboard() {
                             <span>Field {manager.field}</span>
                             <span>Internal {manager.internal}</span>
                           </div>
-                        </article>
+                        </button>
                       ))}
                       {!dailyOperations.pmDayBoard?.length && <div className="empty-state">No PM day data yet.</div>}
                     </div>
@@ -470,6 +518,7 @@ export default function OperationsDashboard() {
               <ReportList
                 reports={dashboard.upcomingFollowUps}
                 emptyText="No upcoming follow-ups."
+                onOpen={openPreview}
                 action={(report) => (
                   <div className="row-actions">
                     <span className="status-pill sent">
@@ -487,6 +536,7 @@ export default function OperationsDashboard() {
               <ReportList
                 reports={dashboard.pendingNewSchools}
                 emptyText="No pending new school approvals."
+                onOpen={openPreview}
                 action={(report) => (
                   <div className="row-actions">
                     <button type="button" className="table-action" onClick={() => updateNewSchoolStatus(report._id, 'Approved')}>
@@ -519,6 +569,7 @@ export default function OperationsDashboard() {
               <ReportList
                 reports={dashboard.failedReports}
                 emptyText="No failed emails."
+                onOpen={openPreview}
                 action={(report) => <span className="muted-text">{report.emailLastError || 'Check backend logs'}</span>}
               />
             </Panel>
@@ -617,22 +668,34 @@ export default function OperationsDashboard() {
   }
 }
 
-function SpotlightCard({ title, value = 0, note = '', tone = '' }) {
+function SpotlightCard({ title, value = 0, note = '', tone = '', onClick }) {
+  const Component = onClick ? 'button' : 'article';
+
   return (
-    <article className={`ops-spotlight-card ${tone}`}>
+    <Component
+      type={onClick ? 'button' : undefined}
+      className={`ops-spotlight-card ${tone} ${onClick ? 'ops-spotlight-card-button' : ''}`}
+      onClick={onClick}
+    >
       <span>{title}</span>
       <strong>{value}</strong>
       <p>{note}</p>
-    </article>
+    </Component>
   );
 }
 
-function Metric({ label, value = 0, tone = '' }) {
+function Metric({ label, value = 0, tone = '', onClick }) {
+  const Component = onClick ? 'button' : 'div';
+
   return (
-    <div className={`metric-card ${tone}`}>
+    <Component
+      type={onClick ? 'button' : undefined}
+      className={`metric-card ${tone} ${onClick ? 'metric-card-button' : ''}`}
+      onClick={onClick}
+    >
       <span>{label}</span>
       <strong>{value}</strong>
-    </div>
+    </Component>
   );
 }
 
@@ -647,21 +710,26 @@ function Panel({ title, children }) {
   );
 }
 
-function RankList({ items = [], render, emptyText }) {
+function RankList({ items = [], render, emptyText, onItemClick }) {
   if (!items.length) return <div className="empty-state">{emptyText}</div>;
 
   return (
     <div className="rank-list">
       {items.map((item) => (
-        <div key={item.name || item.purpose} className="rank-row">
+        <button
+          key={item.name || item.purpose}
+          type="button"
+          className={`rank-row ${onItemClick ? 'rank-row-button' : ''}`}
+          onClick={() => onItemClick?.(item)}
+        >
           {render(item)}
-        </div>
+        </button>
       ))}
     </div>
   );
 }
 
-function ReportList({ reports = [], emptyText, action }) {
+function ReportList({ reports = [], emptyText, action, onOpen }) {
   if (!reports.length) return <div className="empty-state">{emptyText}</div>;
 
   return (
@@ -669,7 +737,13 @@ function ReportList({ reports = [], emptyText, action }) {
       {reports.map((report) => (
         <div key={report._id} className="report-row">
           <div>
-            <strong>{report.schoolName}</strong>
+            {onOpen ? (
+              <button type="button" className="inline-link-button" onClick={() => onOpen(report)}>
+                <strong>{report.schoolName}</strong>
+              </button>
+            ) : (
+              <strong>{report.schoolName}</strong>
+            )}
             <span>
               {new Date(report.visitDate).toLocaleDateString('en-IN')} | {report.purposeOfVisit} | {report.programManagerName}
             </span>
@@ -720,7 +794,7 @@ function ReportCardGrid({ reports = [], emptyText, onPreview }) {
   );
 }
 
-function PlanList({ plans = [], emptyText, action }) {
+function PlanList({ plans = [], emptyText, action, onOpen }) {
   if (!plans?.length) return <div className="empty-state">{emptyText}</div>;
 
   return (
@@ -728,7 +802,13 @@ function PlanList({ plans = [], emptyText, action }) {
       {plans.map((plan) => (
         <div key={plan._id} className="report-row">
           <div className="plan-list-copy">
-            <strong>{plan.schoolName}</strong>
+            {onOpen ? (
+              <button type="button" className="inline-link-button" onClick={() => onOpen(plan)}>
+                <strong>{plan.schoolName}</strong>
+              </button>
+            ) : (
+              <strong>{plan.schoolName}</strong>
+            )}
             <span>
               {new Date(plan.plannedDate).toLocaleDateString('en-IN')} | {plan.purposeOfVisit} | {plan.programManagerName}
             </span>
@@ -743,7 +823,7 @@ function PlanList({ plans = [], emptyText, action }) {
   );
 }
 
-function ActionList({ items = [], emptyText }) {
+function ActionList({ items = [], emptyText, onItemClick }) {
   if (!items?.length) return <div className="empty-state">{emptyText}</div>;
 
   return (
@@ -751,7 +831,13 @@ function ActionList({ items = [], emptyText }) {
       {items.map((item) => (
         <div key={`${item.reportId}-${item._id || item.title}`} className="report-row">
           <div>
-            <strong>{item.schoolName}</strong>
+            {onItemClick ? (
+              <button type="button" className="inline-link-button" onClick={() => onItemClick(item)}>
+                <strong>{item.schoolName}</strong>
+              </button>
+            ) : (
+              <strong>{item.schoolName}</strong>
+            )}
             <span>
               {item.title} | {item.owner || 'Program Manager'} | {item.status}
               {item.dueDate ? ` | Due ${new Date(item.dueDate).toLocaleDateString('en-IN')}` : ''}
