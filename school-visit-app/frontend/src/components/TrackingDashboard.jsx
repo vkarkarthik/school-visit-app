@@ -186,6 +186,59 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
     }
   };
 
+  const applyTrackingShortcut = (shortcut) => {
+    if (shortcut === 'all') {
+      setViewMode('cards');
+      setMessage('Showing all tracking cards.');
+      return;
+    }
+
+    if (shortcut === 'sent') {
+      setViewMode('cards');
+      setFilters((prev) => ({ ...prev, emailStatus: 'Sent' }));
+      setMessage('Filtered to sent reports. Click Load Tracking to refresh.');
+      return;
+    }
+
+    if (shortcut === 'failed') {
+      setViewMode('cards');
+      setFilters((prev) => ({ ...prev, emailStatus: 'Failed' }));
+      setMessage('Filtered to failed reports. Click Load Tracking to refresh.');
+      return;
+    }
+
+    if (shortcut === 'newSchools') {
+      setViewMode('cards');
+      setFilters((prev) => ({ ...prev, isNewSchool: 'true' }));
+      setMessage('Filtered to new or prospect schools. Click Load Tracking to refresh.');
+      return;
+    }
+
+    if (shortcut === 'pendingLeads') {
+      setViewMode('cards');
+      setFilters((prev) => ({ ...prev, salesLeadStatus: 'Pending' }));
+      setMessage('Filtered to pending leads. Click Load Tracking to refresh.');
+      return;
+    }
+
+    if (shortcut === 'pendingActions') {
+      setViewMode('actions');
+      setMessage('Showing pending action desk.');
+      return;
+    }
+
+    if (shortcut === 'overdueFollowUps') {
+      setViewMode('cards');
+      setMessage('Showing loaded cards. Focus on reports with overdue follow-ups.');
+      return;
+    }
+
+    if (shortcut === 'timeline') {
+      setViewMode('timeline');
+      setMessage('Switch to timeline view and pick a school to continue.');
+    }
+  };
+
   const openTimelineForReport = async (report) => {
     setFilters((prev) => ({
       ...prev,
@@ -456,38 +509,38 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
       </div>
 
       <div className="stats-row">
-        <div className="stat-card">
+        <button type="button" className="stat-card stat-card-button" onClick={() => applyTrackingShortcut('all')}>
           <span>Total Reports</span>
           <strong>{summary.totalReports}</strong>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card-button" onClick={() => applyTrackingShortcut('sent')}>
           <span>Sent</span>
           <strong>{summary.sentReports}</strong>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card-button" onClick={() => applyTrackingShortcut('failed')}>
           <span>Failed</span>
           <strong>{summary.failedReports}</strong>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card-button" onClick={() => applyTrackingShortcut('newSchools')}>
           <span>New Schools</span>
           <strong>{summary.newSchoolReports}</strong>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card-button" onClick={() => applyTrackingShortcut('pendingLeads')}>
           <span>Pending Leads</span>
           <strong>{summary.pendingNewSchools}</strong>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card-button" onClick={() => applyTrackingShortcut('timeline')}>
           <span>Unique Schools</span>
           <strong>{summary.uniqueSchools || 0}</strong>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card-button" onClick={() => applyTrackingShortcut('pendingActions')}>
           <span>{isAdmin ? 'Active PMs' : 'Pending Actions'}</span>
           <strong>{isAdmin ? summary.activeManagers || 0 : summary.pendingActionItems || 0}</strong>
-        </div>
-        <div className="stat-card">
+        </button>
+        <button type="button" className="stat-card stat-card-button" onClick={() => applyTrackingShortcut('overdueFollowUps')}>
           <span>Overdue Follow-ups</span>
           <strong>{summary.overdueFollowUps || 0}</strong>
-        </div>
+        </button>
       </div>
 
       {viewMode === 'cards' && (!reports.length ? (
