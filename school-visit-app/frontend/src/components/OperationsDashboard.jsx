@@ -7,6 +7,7 @@ export default function OperationsDashboard() {
   const [message, setMessage] = useState('');
   const [year, setYear] = useState(new Date().getFullYear());
   const [previewReport, setPreviewReport] = useState(null);
+  const [activeBoard, setActiveBoard] = useState('overview');
   const [reportFilters, setReportFilters] = useState({
     search: '',
     manager: '',
@@ -44,6 +45,11 @@ export default function OperationsDashboard() {
   const summary = dashboard?.summary || {};
   const plannerDashboard = dashboard?.plannerDashboard || {};
   const dailyOperations = dashboard?.dailyOperations || {};
+  const spotlight = {
+    risk: (dailyOperations.totals?.blocked || 0) + (dailyOperations.totals?.closurePending || 0) + (summary.failedReports || 0),
+    momentum: (summary.sentReports || 0) + (summary.convertedPlans || 0),
+    queue: (summary.pendingActionItems || 0) + (summary.pendingNewSchools || 0),
+  };
   const filteredRecentReports = (dashboard?.recentReports || []).filter((report) => {
     const search = reportFilters.search.toLowerCase();
     const manager = reportFilters.manager.toLowerCase();
@@ -65,7 +71,8 @@ export default function OperationsDashboard() {
       <div className="panel dashboard-hero">
         <div>
           <span className="eyebrow">Operations overview</span>
-          <h2>Reports, leads, and delivery health</h2>
+          <h2>Operations control room</h2>
+          <p className="muted-text">See today’s risk, pipeline movement, and PM execution without scrolling through one long page.</p>
         </div>
         <label className="year-filter">
           Year
@@ -78,22 +85,58 @@ export default function OperationsDashboard() {
 
       {!loading && dashboard && (
         <>
-          <div className="dashboard-stats">
-            <Metric label="Total Reports" value={summary.totalReports} />
-            <Metric label="This Month" value={summary.monthReports} />
+          <div className="dashboard-stats dashboard-stats-compact">
             <Metric label="Sent" value={summary.sentReports} tone="green" />
-            <Metric label="Failed" value={summary.failedReports} tone="red" />
-            <Metric label="New Schools" value={summary.newSchoolReports} tone="blue" />
-            <Metric label="Pending Leads" value={summary.pendingNewSchools} tone="yellow" />
-            <Metric label="Sheet Sync Failed" value={summary.sheetSyncFailed} tone="red" />
-            <Metric label="Unique Schools" value={summary.uniqueSchools} />
-            <Metric label="Active PMs" value={summary.activeManagers} />
-            <Metric label="Planned Visits" value={summary.plannedVisits} tone="blue" />
-            <Metric label="Converted Plans" value={summary.convertedPlans} tone="green" />
+            <Metric label="At Risk" value={spotlight.risk} tone="red" />
             <Metric label="Pending Actions" value={summary.pendingActionItems} tone="yellow" />
+            <Metric label="PMs Active" value={summary.activeManagers} tone="blue" />
+            <Metric label="Open Plans" value={(dailyOperations.totals?.todayPlans || 0) + (dailyOperations.nextThirtyDaysOpen || 0)} />
             <Metric label="Overdue Follow-ups" value={summary.overdueFollowUps} tone="red" />
           </div>
 
+          <div className="ops-spotlight-grid">
+            <SpotlightCard
+              title="Risk Desk"
+              tone="red"
+              value={spotlight.risk}
+              note={`${dailyOperations.totals?.blocked || 0} blocked, ${dailyOperations.totals?.closurePending || 0} pending closure, ${summary.failedReports || 0} failed emails`}
+            />
+            <SpotlightCard
+              title="Delivery Momentum"
+              tone="green"
+              value={spotlight.momentum}
+              note={`${summary.sentReports || 0} reports sent and ${summary.convertedPlans || 0} plans converted`}
+            />
+            <SpotlightCard
+              title="Follow-up Queue"
+              tone="yellow"
+              value={spotlight.queue}
+              note={`${summary.pendingActionItems || 0} action items and ${summary.pendingNewSchools || 0} pending leads`}
+            />
+          </div>
+
+          <div className="scheduler-toolbar ops-board-switcher">
+            <div className="scheduler-presets">
+              {[
+                { id: 'overview', label: 'Overview' },
+                { id: 'planner', label: 'Planner Board' },
+                { id: 'pipeline', label: 'Pipeline' },
+                { id: 'reports', label: 'Reports' },
+              ].map((view) => (
+                <button
+                  key={view.id}
+                  type="button"
+                  className={`scheduler-chip ${activeBoard === view.id ? 'active' : ''}`}
+                  onClick={() => setActiveBoard(view.id)}
+                >
+                  {view.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {activeBoard === 'overview' && (
+          <>
           <div className="dashboard-grid">
             <Panel title="Reports by Manager">
               <RankList
@@ -122,6 +165,72 @@ export default function OperationsDashboard() {
             </Panel>
           </div>
 
+          <div className="dashboard-grid">
+            <Panel title="Today’s Risk and Escalations">
+              <div className="planner-attention-list">
+                {(dailyOperations.blockedPlans || []).slice(0, 4).map((plan) => (
+                  <div key={plan._id} className="planner-attention-row">
+                    <div>
+                      <strong>{plan.programManagerName} | {plan.schoolName}</strong>
+                      <span>{plan.blockers || 'Blocked but no blocker note added yet.'}</span>
+                    </div>
+                    <span className="status-pill failed">Blocked</span>
+                  </div>
+                ))}
+                {(dailyOperations.managersWithoutPlanToday || []).slice(0, 3).map((manager) => (
+                  <div key={manager.key} className="planner-attention-row">
+                    <div>
+                      <strong>{manager.name}</strong>
+                      <span>{manager.email || 'Email not available'} | No plan created for today</span>
+                    </div>
+                    <span className="status-pill warning">No plan</span>
+                  </div>
+                ))}
+                {!dailyOperations.blockedPlans?.length && !dailyOperations.managersWithoutPlanToday?.length && (
+                  <div className="empty-state">No escalations for today.</div>
+                )}
+              </div>
+            </Panel>
+
+            <Panel title="What Needs Action Next">
+              <ActionList items={(dashboard.pendingActionItems || []).slice(0, 5)} emptyText="No pending action items." />
+            </Panel>
+          </div>
+
+          <div className="dashboard-grid wide">
+            <Panel title="Upcoming Planned Visits">
+              <PlanList
+                plans={dashboard.upcomingPlans}
+                emptyText="No upcoming plans."
+                action={(plan) => (
+                  <button type="button" className="table-action" onClick={() => sendPlanReminder(plan._id)}>
+                    Remind
+                  </button>
+                )}
+              />
+            </Panel>
+
+            <Panel title="Upcoming Follow-ups">
+              <ReportList
+                reports={dashboard.upcomingFollowUps}
+                emptyText="No upcoming follow-ups."
+                action={(report) => (
+                  <div className="row-actions">
+                    <span className="status-pill sent">
+                      {new Date(report.nextVisitDate).toLocaleDateString('en-IN')}
+                    </span>
+                    <button type="button" className="table-action" onClick={() => sendFollowUpReminder(report._id)}>
+                      Remind
+                    </button>
+                  </div>
+                )}
+              />
+            </Panel>
+          </div>
+          </>
+          )}
+
+          {activeBoard === 'planner' && (
           <Panel title="Daily Planner Dashboard">
             <div className="planner-dashboard-shell">
               <div className="ops-command-board">
@@ -353,20 +462,10 @@ export default function OperationsDashboard() {
               </div>
             </div>
           </Panel>
+          )}
 
+          {activeBoard === 'pipeline' && (
           <div className="dashboard-grid wide">
-            <Panel title="Upcoming Planned Visits">
-              <PlanList
-                plans={dashboard.upcomingPlans}
-                emptyText="No upcoming plans."
-                action={(plan) => (
-                  <button type="button" className="table-action" onClick={() => sendPlanReminder(plan._id)}>
-                    Remind
-                  </button>
-                )}
-              />
-            </Panel>
-
             <Panel title="Upcoming Follow-ups">
               <ReportList
                 reports={dashboard.upcomingFollowUps}
@@ -424,11 +523,9 @@ export default function OperationsDashboard() {
               />
             </Panel>
           </div>
+          )}
 
-          <Panel title="Pending Action Tracker">
-            <ActionList items={dashboard.pendingActionItems} emptyText="No pending action items." />
-          </Panel>
-
+          {activeBoard === 'reports' && (
           <Panel title="Recent Reports">
             <div className="report-card-filters">
               <label>
@@ -467,6 +564,7 @@ export default function OperationsDashboard() {
 
             <ReportCardGrid reports={filteredRecentReports} emptyText="No reports yet." onPreview={openPreview} />
           </Panel>
+          )}
 
           {previewReport && (
             <ReportPreviewModal
@@ -517,6 +615,16 @@ export default function OperationsDashboard() {
   function closePreview() {
     setPreviewReport(null);
   }
+}
+
+function SpotlightCard({ title, value = 0, note = '', tone = '' }) {
+  return (
+    <article className={`ops-spotlight-card ${tone}`}>
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <p>{note}</p>
+    </article>
+  );
 }
 
 function Metric({ label, value = 0, tone = '' }) {

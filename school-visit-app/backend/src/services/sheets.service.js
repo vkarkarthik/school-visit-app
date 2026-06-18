@@ -41,6 +41,14 @@ const PLANNER_LOG_HEADERS = [
   "School Email",
   "Course / Requirement",
   "Planning Notes",
+  "Work Mode",
+  "Planned Location",
+  "Priority Level",
+  "Day Status",
+  "Blockers / Dependencies",
+  "Actual Location",
+  "Actual Work Done",
+  "Closure Notes",
 ];
 const LEGACY_PLANNER_DASHBOARD_SHEET = "Dashboard";
 const PLANNER_DASHBOARD_SHEET = "Planner Ops Dashboard";
@@ -444,7 +452,7 @@ function buildPlannerAggregateFormula(pmSheetTitles = []) {
     return `={${escapedHeaders}}`;
   }
 
-  const sheetRanges = pmSheetTitles.map((title) => `'${title.replace(/'/g, "''")}'!A2:S`).join(";");
+  const sheetRanges = pmSheetTitles.map((title) => `'${title.replace(/'/g, "''")}'!A2:AA`).join(";");
   return `={${escapedHeaders};QUERY({${sheetRanges}},"select * where Col1 is not null",0)}`;
 }
 
@@ -453,7 +461,7 @@ function buildPlannerDateFormula() {
 }
 
 function buildDashboardFilteredFormula() {
-  return `=IFERROR(FILTER('${PLANNER_DASHBOARD_HELPER_SHEET}'!A2:T,IF($B$4="All",TRUE,'${PLANNER_DASHBOARD_HELPER_SHEET}'!D2:D=$B$4),IF($D$4="All",TRUE,'${PLANNER_DASHBOARD_HELPER_SHEET}'!E2:E=$D$4),IF($F$4="All",TRUE,'${PLANNER_DASHBOARD_HELPER_SHEET}'!H2:H=$F$4),IF($H$4="Today",'${PLANNER_DASHBOARD_HELPER_SHEET}'!T2:T=TODAY(),IF($H$4="Next 7 Days",('${PLANNER_DASHBOARD_HELPER_SHEET}'!T2:T>=TODAY())*('${PLANNER_DASHBOARD_HELPER_SHEET}'!T2:T<=TODAY()+7),IF($H$4="Next 30 Days",('${PLANNER_DASHBOARD_HELPER_SHEET}'!T2:T>=TODAY())*('${PLANNER_DASHBOARD_HELPER_SHEET}'!T2:T<=TODAY()+30),TRUE)))),"")`;
+  return `=IFERROR(FILTER('${PLANNER_DASHBOARD_HELPER_SHEET}'!A2:AB,'${PLANNER_DASHBOARD_HELPER_SHEET}'!A2:A<>"",IF($B$4="All",'${PLANNER_DASHBOARD_HELPER_SHEET}'!A2:A<>"",'${PLANNER_DASHBOARD_HELPER_SHEET}'!D2:D=$B$4),IF($D$4="All",'${PLANNER_DASHBOARD_HELPER_SHEET}'!A2:A<>"",'${PLANNER_DASHBOARD_HELPER_SHEET}'!E2:E=$D$4),IF($F$4="All",'${PLANNER_DASHBOARD_HELPER_SHEET}'!A2:A<>"",'${PLANNER_DASHBOARD_HELPER_SHEET}'!H2:H=$F$4),IF($H$4="Today",'${PLANNER_DASHBOARD_HELPER_SHEET}'!AB2:AB=TODAY(),IF($H$4="Next 7 Days",('${PLANNER_DASHBOARD_HELPER_SHEET}'!AB2:AB>=TODAY())*('${PLANNER_DASHBOARD_HELPER_SHEET}'!AB2:AB<=TODAY()+7),IF($H$4="Next 30 Days",('${PLANNER_DASHBOARD_HELPER_SHEET}'!AB2:AB>=TODAY())*('${PLANNER_DASHBOARD_HELPER_SHEET}'!AB2:AB<=TODAY()+30),'${PLANNER_DASHBOARD_HELPER_SHEET}'!A2:A<>"")))),"")`;
 }
 
 function buildUniquePmFormula() {
@@ -536,7 +544,7 @@ function buildChartRequest({ sheetId, title, chartType = "COLUMN", domainStartRo
 async function upsertPlannerSnapshotRow(spreadsheetId, sheetName, planId, row) {
   const response = await sheetsClient.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${sheetName}'!A:S`,
+    range: `'${sheetName}'!A:AA`,
   });
 
   const rows = response.data.values || [];
@@ -545,7 +553,7 @@ async function upsertPlannerSnapshotRow(spreadsheetId, sheetName, planId, row) {
   if (existingIndex === -1) {
     await sheetsClient.spreadsheets.values.append({
       spreadsheetId,
-      range: `'${sheetName}'!A:S`,
+      range: `'${sheetName}'!A:AA`,
       valueInputOption: "USER_ENTERED",
       insertDataOption: "INSERT_ROWS",
       requestBody: {
@@ -558,7 +566,7 @@ async function upsertPlannerSnapshotRow(spreadsheetId, sheetName, planId, row) {
   const rowNumber = existingIndex + 2;
   await sheetsClient.spreadsheets.values.update({
     spreadsheetId,
-    range: `'${sheetName}'!A${rowNumber}:S${rowNumber}`,
+    range: `'${sheetName}'!A${rowNumber}:AA${rowNumber}`,
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [row],
@@ -587,6 +595,14 @@ function buildPlannerRow(plan, action = "Created") {
     plan.schoolEmail || "",
     plan.course || "",
     plan.planningNotes || "",
+    plan.workMode || "",
+    plan.plannedLocation || "",
+    plan.priorityLevel || "",
+    plan.dailyStatus || "",
+    plan.blockers || "",
+    plan.actualLocation || "",
+    plan.actualWorkDone || "",
+    plan.closureNotes || "",
   ];
 }
 
@@ -606,17 +622,17 @@ async function rewritePmSnapshotSheets(spreadsheetId, plans = []) {
       spreadsheetId,
       sheetName,
       PLANNER_LOG_HEADERS,
-      `'${sheetName}'!A1:S1`
+      `'${sheetName}'!A1:AA1`
     );
 
     await sheetsClient.spreadsheets.values.clear({
       spreadsheetId,
-      range: `'${sheetName}'!A:S`,
+      range: `'${sheetName}'!A:AA`,
     });
 
     await sheetsClient.spreadsheets.values.update({
       spreadsheetId,
-      range: `'${sheetName}'!A1:S1`,
+      range: `'${sheetName}'!A1:AA1`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [PLANNER_LOG_HEADERS],
@@ -626,7 +642,7 @@ async function rewritePmSnapshotSheets(spreadsheetId, plans = []) {
     if (groupPlans.length) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${sheetName}'!A2:S${groupPlans.length + 1}`,
+        range: `'${sheetName}'!A2:AA${groupPlans.length + 1}`,
         valueInputOption: "USER_ENTERED",
         requestBody: {
           values: groupPlans.map((plan) => buildPlannerRow(plan, "Current Snapshot")),
@@ -683,18 +699,50 @@ export async function buildPlannerDashboardSheet() {
 
   await rewritePmSnapshotSheets(spreadsheetId, currentPlans);
 
-  await recreateSheetInSpreadsheet(spreadsheetId, PLANNER_DASHBOARD_HELPER_SHEET, true);
+  const helperProps = await recreateSheetInSpreadsheet(spreadsheetId, PLANNER_DASHBOARD_HELPER_SHEET, true);
   const dashboardProps = await ensureSheetInSpreadsheet(spreadsheetId, PLANNER_DASHBOARD_SHEET, false);
   const managementProps = await recreateSheetInSpreadsheet(spreadsheetId, MANAGEMENT_DASHBOARD_SHEET, false);
 
+  await sheetsClient.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId: helperProps.sheetId,
+              gridProperties: {
+                rowCount: 1000,
+                columnCount: 52,
+              },
+            },
+            fields: "gridProperties.rowCount,gridProperties.columnCount",
+          },
+        },
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId: dashboardProps.sheetId,
+              gridProperties: {
+                rowCount: 1000,
+                columnCount: 52,
+              },
+            },
+            fields: "gridProperties.rowCount,gridProperties.columnCount",
+          },
+        },
+      ],
+    },
+  });
+
   await sheetsClient.spreadsheets.values.clear({
     spreadsheetId,
-    range: `'${PLANNER_DASHBOARD_HELPER_SHEET}'!A:Z`,
+    range: `'${PLANNER_DASHBOARD_HELPER_SHEET}'!A:AB`,
   });
 
   await sheetsClient.spreadsheets.values.update({
     spreadsheetId,
-    range: `'${PLANNER_DASHBOARD_HELPER_SHEET}'!A1:S${currentPlans.length + 1}`,
+    range: `'${PLANNER_DASHBOARD_HELPER_SHEET}'!A1:AA${currentPlans.length + 1}`,
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [PLANNER_LOG_HEADERS, ...currentPlans.map((plan) => buildPlannerRow(plan, "Current Snapshot"))],
@@ -703,7 +751,7 @@ export async function buildPlannerDashboardSheet() {
 
   await sheetsClient.spreadsheets.values.update({
     spreadsheetId,
-    range: `'${PLANNER_DASHBOARD_HELPER_SHEET}'!T1`,
+    range: `'${PLANNER_DASHBOARD_HELPER_SHEET}'!AB1`,
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [[buildPlannerDateFormula()]],
@@ -712,7 +760,7 @@ export async function buildPlannerDashboardSheet() {
 
   await sheetsClient.spreadsheets.values.clear({
     spreadsheetId,
-    range: `'${PLANNER_DASHBOARD_SHEET}'!A:Z`,
+    range: `'${PLANNER_DASHBOARD_SHEET}'!A:AZ`,
   });
 
   await sheetsClient.spreadsheets.batchUpdate({
@@ -725,7 +773,7 @@ export async function buildPlannerDashboardSheet() {
               sheetId: dashboardProps.sheetId,
               gridProperties: {
                 rowCount: 1000,
-                columnCount: 50,
+                columnCount: 52,
               },
             },
             fields: "gridProperties.rowCount,gridProperties.columnCount",
@@ -747,27 +795,27 @@ export async function buildPlannerDashboardSheet() {
         ["Status", "All", "Program Manager", "All", "State", "All", "Time Window", "Next 7 Days"],
         [],
         ["Total Plans", '=IFERROR(COUNTA(X11:X),0)', "Draft", '=COUNTIF(AA11:AA,"Draft")', "Confirmed", '=COUNTIF(AA11:AA,"Confirmed")', "Completed", '=COUNTIF(AA11:AA,"Completed")'],
-        ["Cancelled", '=COUNTIF(AA11:AA,"Cancelled")', "Today", '=COUNTIFS(AQ11:AQ,TODAY())', "Next 7 Days", '=COUNTIFS(AQ11:AQ,">="&TODAY(),AQ11:AQ,"<="&TODAY()+7)', "Needs Attention", '=IFERROR(COUNT(FILTER(AQ11:AQ,(AQ11:AQ<TODAY())*((AA11:AA="Draft")+(AA11:AA="Confirmed")))),0)'],
+        ["Cancelled", '=COUNTIF(AA11:AA,"Cancelled")', "Today", '=COUNTIFS(AY11:AY,TODAY())', "Next 7 Days", '=COUNTIFS(AY11:AY,">="&TODAY(),AY11:AY,"<="&TODAY()+7)', "Needs Attention", '=IFERROR(COUNT(FILTER(AY11:AY,(AY11:AY<TODAY())*((AA11:AA="Draft")+(AA11:AA="Confirmed")))),0)'],
         [],
         ["Upcoming Visits"],
         ["Date","School","PM","State","Purpose","Status","Time"],
-        ["=IFERROR(QUERY({AQ11:AQ,AD11:AD,AB11:AB,AE11:AE,AG11:AG,AA11:AA,AJ11:AJ&\" - \"&AK11:AK},\"select Col1,Col2,Col3,Col4,Col5,Col6,Col7 where Col1 is not null order by Col1 asc label Col1 'Date',Col2 'School',Col3 'PM',Col4 'State',Col5 'Purpose',Col6 'Status',Col7 'Time'\",0),\"\")"],
+        ["=IFERROR(QUERY({AY11:AY,AD11:AD,AB11:AB,AE11:AE,AG11:AG,AA11:AA,AJ11:AJ&\" - \"&AK11:AK},\"select Col1,Col2,Col3,Col4,Col5,Col6,Col7 where Col1 is not null order by Col1 asc label Col1 'Date',Col2 'School',Col3 'PM',Col4 'State',Col5 'Purpose',Col6 'Status',Col7 'Time'\",0),\"\")"],
         [],
         ["Attention Items"],
         ["Date","School","PM","Status","Work Planned"],
-        ["=IFERROR(QUERY({AQ11:AQ,AD11:AD,AB11:AB,AA11:AA,AH11:AH},\"select Col1,Col2,Col3,Col4,Col5 where Col1 < date '\"&TEXT(TODAY(),\"yyyy-mm-dd\")&\"' and (Col4 = 'Draft' or Col4 = 'Confirmed') order by Col1 asc label Col1 'Date',Col2 'School',Col3 'PM',Col4 'Status',Col5 'Work Planned'\",0),\"\")"],
+        ["=IFERROR(QUERY({AY11:AY,AD11:AD,AB11:AB,AA11:AA,AH11:AH},\"select Col1,Col2,Col3,Col4,Col5 where Col1 < date '\"&TEXT(TODAY(),\"yyyy-mm-dd\")&\"' and (Col4 = 'Draft' or Col4 = 'Confirmed') order by Col1 asc label Col1 'Date',Col2 'School',Col3 'PM',Col4 'Status',Col5 'Work Planned'\",0),\"\")"],
         [],
         ["Planner Load by PM", "", "", "", "Planner Load by State", "", "", ""],
-        ["=IFERROR(QUERY(AB11:AB,\"select AB, count(AB) where AB is not null group by AB order by count(AB) desc label AB 'PM', count(AB) 'Plans'\",0),\"\")"],
+        ["=IFERROR(QUERY(AB11:AB,\"select Col1, count(Col1) where Col1 is not null group by Col1 order by count(Col1) desc label Col1 'PM', count(Col1) 'Plans'\",0),\"\")"],
         [],
         ["", "", "", "", "", "", "", ""],
-        ["=IFERROR(QUERY(AE11:AE,\"select AE, count(AE) where AE is not null group by AE order by count(AE) desc label AE 'State', count(AE) 'Plans'\",0),\"\")"],
+        ["=IFERROR(QUERY(AE11:AE,\"select Col1, count(Col1) where Col1 is not null group by Col1 order by count(Col1) desc label Col1 'State', count(Col1) 'Plans'\",0),\"\")"],
         [],
         ["Status Mix", "", "", "", "Purpose Mix", "", "", ""],
-        ["=IFERROR(QUERY(AA11:AA,\"select AA, count(AA) where AA is not null group by AA order by count(AA) desc label AA 'Status', count(AA) 'Plans'\",0),\"\")"],
+        ["=IFERROR(QUERY(AA11:AA,\"select Col1, count(Col1) where Col1 is not null group by Col1 order by count(Col1) desc label Col1 'Status', count(Col1) 'Plans'\",0),\"\")"],
         [],
         ["", "", "", "", "", "", "", ""],
-        ["=IFERROR(QUERY(AG11:AG,\"select AG, count(AG) where AG is not null group by AG order by count(AG) desc label AG 'Purpose', count(AG) 'Plans'\",0),\"\")"],
+        ["=IFERROR(QUERY(AG11:AG,\"select Col1, count(Col1) where Col1 is not null group by Col1 order by count(Col1) desc label Col1 'Purpose', count(Col1) 'Plans'\",0),\"\")"],
       ],
     },
   });
@@ -790,7 +838,7 @@ export async function buildPlannerDashboardSheet() {
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [
-        ["Logged At","Action","Plan ID","Status","Program Manager","Program Manager Email","School Name","State","City","Purpose of Visit","Work Planned","Planned Date","Start Time","End Time","Point of Contact","Contact Number","School Email","Course / Requirement","Planning Notes","Parsed Planned Date"],
+        [...PLANNER_LOG_HEADERS, "Parsed Planned Date"],
         [buildDashboardFilteredFormula()],
       ],
     },
@@ -1053,19 +1101,19 @@ export async function buildPlannerDashboardSheet() {
         [],
         ["Status", "All", "Program Manager", "All", "State", "All", "Time Window", "Next 30 Days"],
         [],
-        ["Total Plans", '=IFERROR(COUNTA(X11:X),0)', "Confirmed", '=COUNTIF(AA11:AA,"Confirmed")', "Next 7 Days", '=COUNTIFS(AQ11:AQ,">="&TODAY(),AQ11:AQ,"<="&TODAY()+7)', "Needs Attention", '=IFERROR(COUNT(FILTER(AQ11:AQ,(AQ11:AQ<TODAY())*((AA11:AA="Draft")+(AA11:AA="Confirmed")))),0)'],
-        ["Draft", '=COUNTIF(AA11:AA,"Draft")', "Completed", '=COUNTIF(AA11:AA,"Completed")', "Cancelled", '=COUNTIF(AA11:AA,"Cancelled")', "Today", '=COUNTIFS(AQ11:AQ,TODAY())'],
+        ["Total Plans", '=IFERROR(COUNTA(X11:X),0)', "Confirmed", '=COUNTIF(AA11:AA,"Confirmed")', "Next 7 Days", '=COUNTIFS(AY11:AY,">="&TODAY(),AY11:AY,"<="&TODAY()+7)', "Needs Attention", '=IFERROR(COUNT(FILTER(AY11:AY,(AY11:AY<TODAY())*((AA11:AA="Draft")+(AA11:AA="Confirmed")))),0)'],
+        ["Draft", '=COUNTIF(AA11:AA,"Draft")', "Completed", '=COUNTIF(AA11:AA,"Completed")', "Cancelled", '=COUNTIF(AA11:AA,"Cancelled")', "Today", '=COUNTIFS(AY11:AY,TODAY())'],
         [],
         ["High-Risk / Attention Items"],
         ["Date","School","PM","Status","Work Planned"],
-        ["=IFERROR(QUERY({AQ11:AQ,AD11:AD,AB11:AB,AA11:AA,AH11:AH},\"select Col1,Col2,Col3,Col4,Col5 where Col1 < date '\"&TEXT(TODAY(),\"yyyy-mm-dd\")&\"' and (Col4 = 'Draft' or Col4 = 'Confirmed') order by Col1 asc label Col1 'Date',Col2 'School',Col3 'PM',Col4 'Status',Col5 'Work Planned'\",0),\"\")"],
+        ["=IFERROR(QUERY({AY11:AY,AD11:AD,AB11:AB,AA11:AA,AH11:AH},\"select Col1,Col2,Col3,Col4,Col5 where Col1 < date '\"&TEXT(TODAY(),\"yyyy-mm-dd\")&\"' and (Col4 = 'Draft' or Col4 = 'Confirmed') order by Col1 asc label Col1 'Date',Col2 'School',Col3 'PM',Col4 'Status',Col5 'Work Planned'\",0),\"\")"],
         [],
         ["Upcoming Visits"],
         ["Date","School","PM","State","Purpose","Status","Time"],
-        ["=IFERROR(QUERY({AQ11:AQ,AD11:AD,AB11:AB,AE11:AE,AG11:AG,AA11:AA,AJ11:AJ&\" - \"&AK11:AK},\"select Col1,Col2,Col3,Col4,Col5,Col6,Col7 where Col1 is not null order by Col1 asc label Col1 'Date',Col2 'School',Col3 'PM',Col4 'State',Col5 'Purpose',Col6 'Status',Col7 'Time'\",0),\"\")"],
+        ["=IFERROR(QUERY({AY11:AY,AD11:AD,AB11:AB,AE11:AE,AG11:AG,AA11:AA,AJ11:AJ&\" - \"&AK11:AK},\"select Col1,Col2,Col3,Col4,Col5,Col6,Col7 where Col1 is not null order by Col1 asc label Col1 'Date',Col2 'School',Col3 'PM',Col4 'State',Col5 'Purpose',Col6 'Status',Col7 'Time'\",0),\"\")"],
         [],
         ["Status Mix", "", "", "PM Load", "", "", "State Load", "", "", "Purpose Mix"],
-        ["=IFERROR(QUERY(AA11:AA,\"select AA, count(AA) where AA is not null group by AA order by count(AA) desc label AA 'Status', count(AA) 'Plans'\",0),\"\")","","","=IFERROR(QUERY(AB11:AB,\"select AB, count(AB) where AB is not null group by AB order by count(AB) desc label AB 'PM', count(AB) 'Plans'\",0),\"\")","","","=IFERROR(QUERY(AE11:AE,\"select AE, count(AE) where AE is not null group by AE order by count(AE) desc label AE 'State', count(AE) 'Plans'\",0),\"\")","","","=IFERROR(QUERY(AG11:AG,\"select AG, count(AG) where AG is not null group by AG order by count(AG) desc label AG 'Purpose', count(AG) 'Plans'\",0),\"\")"],
+        ["=IFERROR(QUERY(AA11:AA,\"select Col1, count(Col1) where Col1 is not null group by Col1 order by count(Col1) desc label Col1 'Status', count(Col1) 'Plans'\",0),\"\")","","","=IFERROR(QUERY(AB11:AB,\"select Col1, count(Col1) where Col1 is not null group by Col1 order by count(Col1) desc label Col1 'PM', count(Col1) 'Plans'\",0),\"\")","","","=IFERROR(QUERY(AE11:AE,\"select Col1, count(Col1) where Col1 is not null group by Col1 order by count(Col1) desc label Col1 'State', count(Col1) 'Plans'\",0),\"\")","","","=IFERROR(QUERY(AG11:AG,\"select Col1, count(Col1) where Col1 is not null group by Col1 order by count(Col1) desc label Col1 'Purpose', count(Col1) 'Plans'\",0),\"\")"],
       ],
     },
   });
@@ -1088,7 +1136,7 @@ export async function buildPlannerDashboardSheet() {
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [
-        ["Logged At","Action","Plan ID","Status","Program Manager","Program Manager Email","School Name","State","City","Purpose of Visit","Work Planned","Planned Date","Start Time","End Time","Point of Contact","Contact Number","School Email","Course / Requirement","Planning Notes","Parsed Planned Date"],
+        [...PLANNER_LOG_HEADERS, "Parsed Planned Date"],
         [buildDashboardFilteredFormula()],
       ],
     },
@@ -1300,14 +1348,14 @@ export async function appendPlanLogToSheet(plan, action = "Created") {
     plannerSpreadsheetId,
     env.plannerLogSheetName,
     PLANNER_LOG_HEADERS,
-    `'${env.plannerLogSheetName}'!A1:S1`
+    `'${env.plannerLogSheetName}'!A1:AA1`
   );
 
   await ensureSheetWithHeadersInSpreadsheet(
     plannerSpreadsheetId,
     plannerTabName,
     PLANNER_LOG_HEADERS,
-    `'${plannerTabName}'!A1:S1`
+    `'${plannerTabName}'!A1:AA1`
   );
 
   const row = buildPlannerRow(plan, action);
@@ -1316,7 +1364,7 @@ export async function appendPlanLogToSheet(plan, action = "Created") {
 
   await sheetsClient.spreadsheets.values.append({
     spreadsheetId: plannerSpreadsheetId,
-    range: `'${env.plannerLogSheetName}'!A:S`,
+    range: `'${env.plannerLogSheetName}'!A:AA`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
     requestBody: {

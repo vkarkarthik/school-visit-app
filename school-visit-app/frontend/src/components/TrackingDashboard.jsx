@@ -39,6 +39,7 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
   const [reports, setReports] = useState([]);
   const [timeline, setTimeline] = useState([]);
   const [pendingActionItems, setPendingActionItems] = useState([]);
+  const [viewMode, setViewMode] = useState('cards');
   const [editingReport, setEditingReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -216,9 +217,28 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
       <div className="panel-header">
         <div>
           <span className="eyebrow">Monitoring</span>
-          <h2>{isAdmin ? 'School tracking' : 'My report tracking'}</h2>
+          <h2>{isAdmin ? 'Tracking and timelines' : 'My execution tracking'}</h2>
         </div>
-        <span className="panel-badge">Yearly</span>
+        <span className="panel-badge">{viewMode === 'cards' ? 'Card view' : viewMode === 'timeline' ? 'Timeline view' : 'Action desk'}</span>
+      </div>
+
+      <div className="scheduler-toolbar">
+        <div className="scheduler-presets">
+          {[
+            { id: 'cards', label: 'Card View' },
+            { id: 'timeline', label: 'School Timeline' },
+            { id: 'actions', label: 'Action Desk' }
+          ].map((view) => (
+            <button
+              key={view.id}
+              type="button"
+              className={`scheduler-chip ${viewMode === view.id ? 'active' : ''}`}
+              onClick={() => setViewMode(view.id)}
+            >
+              {view.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="tracking-filter-grid">
@@ -434,7 +454,7 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
         </div>
       </div>
 
-      {!reports.length ? (
+      {viewMode === 'cards' && (!reports.length ? (
         <div className="empty-state">No reports found.</div>
       ) : (
         <div className="tracking-card-grid">
@@ -513,43 +533,65 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
             );
           })}
         </div>
-      )}
-      {timeline.length > 0 && (
+      ))}
+      {viewMode === 'timeline' && (
         <div className="timeline-panel">
           <div className="panel-header compact">
-            <h2>School Timeline</h2>
+            <div>
+              <span className="eyebrow">School view</span>
+              <h2>School Timeline</h2>
+            </div>
+            {!timeline.length && <button type="button" className="table-action" onClick={loadTimeline} disabled={loading || !filters.schoolName}>Load timeline</button>}
           </div>
-          <div className="report-list">
-            {timeline.map((report) => (
-              <div key={report._id} className="report-row">
-                <div>
-                  <strong>{new Date(report.visitDate).toLocaleDateString('en-IN')} | {report.purposeOfVisit}</strong>
-                  <span>{report.programManagerName} | {report.emailStatus} | Next: {report.nextVisitDate ? new Date(report.nextVisitDate).toLocaleDateString('en-IN') : 'Not planned'}</span>
-                </div>
-                {report.pdfUrl && <a href={report.pdfUrl} target="_blank" rel="noreferrer">PDF</a>}
-              </div>
-            ))}
-          </div>
+          {!timeline.length ? (
+            <div className="empty-state">Select a school and load its timeline.</div>
+          ) : (
+            <div className="timeline-stack">
+              {timeline.map((report) => (
+                <article key={report._id} className="timeline-event">
+                  <div className="timeline-date">{new Date(report.visitDate).toLocaleDateString('en-IN')}</div>
+                  <div className="timeline-body">
+                    <strong>{report.purposeOfVisit}</strong>
+                    <span>{report.programManagerName} | {report.emailStatus} | Next: {report.nextVisitDate ? new Date(report.nextVisitDate).toLocaleDateString('en-IN') : 'Not planned'}</span>
+                    <p>{report.actualWorkDone || report.sessionSummary || 'No details recorded.'}</p>
+                    {report.pdfUrl && <a href={report.pdfUrl} target="_blank" rel="noreferrer">Open PDF</a>}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       )}
-      {pendingActionItems.length > 0 && (
+      {viewMode === 'actions' && (
         <div className="timeline-panel">
           <div className="panel-header compact">
-            <h2>Pending Action Tracker</h2>
+            <div>
+              <span className="eyebrow">Action desk</span>
+              <h2>Pending Action Tracker</h2>
+            </div>
           </div>
-          <div className="report-list">
-            {pendingActionItems.map((item) => (
-              <div key={`${item.reportId}-${item._id || item.title}`} className="report-row">
-                <div>
-                  <strong>{item.schoolName} | {item.title}</strong>
-                  <span>
-                    {item.programManagerName} | {item.owner || 'Program Manager'} | {item.status}
-                    {item.dueDate ? ` | Due ${new Date(item.dueDate).toLocaleDateString('en-IN')}` : ''}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+          {!pendingActionItems.length ? (
+            <div className="empty-state">No pending action items.</div>
+          ) : (
+            <div className="report-card-grid">
+              {pendingActionItems.map((item) => (
+                <article key={`${item.reportId}-${item._id || item.title}`} className="report-card">
+                  <div className="report-card-top">
+                    <div>
+                      <strong>{item.schoolName}</strong>
+                      <span>{item.title}</span>
+                    </div>
+                    <span className={`status-pill ${item.status === 'Blocked' ? 'failed' : item.status === 'Completed' ? 'sent' : 'warning'}`}>{item.status}</span>
+                  </div>
+                  <div className="report-card-meta">
+                    <span>{item.programManagerName}</span>
+                    <span>{item.owner || 'Program Manager'}</span>
+                    <span>{item.dueDate ? `Due ${new Date(item.dueDate).toLocaleDateString('en-IN')}` : 'No due date'}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {message && <div className="status-text tracking-message">{message}</div>}

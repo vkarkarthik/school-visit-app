@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import AdminSettings from '../components/AdminSettings';
 import DraftsPanel from '../components/DraftsPanel';
 import GoogleLoginPanel, { isGoogleConfigured } from '../components/GoogleLoginPanel';
+import OperationsCommandCenter from '../components/OperationsCommandCenter';
 import OperationsDashboard from '../components/OperationsDashboard';
 import SchedulerPanel from '../components/SchedulerPanel';
 import SchoolVisitForm from '../components/SchoolVisitForm';
@@ -43,7 +44,7 @@ export default function HomePage() {
   const [schoolMaster, setSchoolMaster] = useState({ states: [], schools: [] });
   const [loading, setLoading] = useState(true);
   const [schoolMasterError, setSchoolMasterError] = useState('');
-  const [activeView, setActiveView] = useState('report');
+  const [activeView, setActiveView] = useState('home');
   const [draftToLoad, setDraftToLoad] = useState(null);
   const [planToConvert, setPlanToConvert] = useState(null);
   const [currentUser, setCurrentUser] = useState(() => {
@@ -69,11 +70,11 @@ export default function HomePage() {
 
   useEffect(() => {
     const allowedViews = isAdmin
-      ? new Set(['scheduler', 'report', 'drafts', 'tracking', 'dashboard', 'settings'])
-      : new Set(['scheduler', 'report', 'drafts', 'tracking']);
+      ? new Set(['home', 'scheduler', 'report', 'drafts', 'tracking', 'dashboard', 'settings'])
+      : new Set(['home', 'scheduler', 'report', 'drafts', 'tracking']);
 
     if (!allowedViews.has(activeView)) {
-      setActiveView('report');
+      setActiveView('home');
     }
   }, [activeView, isAdmin]);
 
@@ -139,7 +140,7 @@ export default function HomePage() {
           onLogout={() => {
             localStorage.removeItem('schoolVisitUser');
             setCurrentUser(emptyUser);
-            setActiveView('report');
+            setActiveView('home');
           }}
         />
 
@@ -201,6 +202,13 @@ export default function HomePage() {
             <nav className="view-tabs" aria-label="Workspace views">
               <button
                 type="button"
+                className={activeView === 'home' ? 'active' : ''}
+                onClick={() => setActiveView('home')}
+              >
+                Overview
+              </button>
+              <button
+                type="button"
                 className={activeView === 'scheduler' ? 'active' : ''}
                 onClick={() => setActiveView('scheduler')}
               >
@@ -220,15 +228,15 @@ export default function HomePage() {
               >
                 My Drafts
               </button>
+              <button
+                type="button"
+                className={activeView === 'tracking' ? 'active' : ''}
+                onClick={() => setActiveView('tracking')}
+              >
+                Tracking
+              </button>
               {isAdmin && (
                 <>
-                  <button
-                    type="button"
-                    className={activeView === 'tracking' ? 'active' : ''}
-                    onClick={() => setActiveView('tracking')}
-                  >
-                    Tracking
-                  </button>
                   <button
                     type="button"
                     className={activeView === 'dashboard' ? 'active' : ''}
@@ -247,6 +255,12 @@ export default function HomePage() {
               )}
             </nav>
 
+            {activeView === 'home' && (
+              <div className="single-workspace single-workspace-wide">
+                <OperationsCommandCenter currentUser={currentUser} isAdmin={isAdmin} onNavigate={setActiveView} />
+              </div>
+            )}
+
             {activeView === 'report' && (
               <div className="single-workspace">
                 <SchoolVisitForm
@@ -256,6 +270,7 @@ export default function HomePage() {
                   planToConvert={planToConvert}
                   onDraftLoaded={() => setDraftToLoad(null)}
                   onPlanLoaded={() => setPlanToConvert(null)}
+                  onReportCreated={() => setActiveView('tracking')}
                 />
               </div>
             )}

@@ -81,6 +81,13 @@ const PURPOSE_GUIDES = {
   }
 };
 
+const REPORT_STEPS = [
+  { id: 1, label: 'Context', note: 'School or work context' },
+  { id: 2, label: 'Outcome', note: 'What happened today' },
+  { id: 3, label: 'Delivery', note: 'Recipients and evidence' },
+  { id: 4, label: 'Review', note: 'Preview and send' }
+];
+
 const emptyForm = (currentUser = {}) => ({
   sourcePlanId: '',
   isNewSchool: 'false',
@@ -132,6 +139,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
   const [previewOpen, setPreviewOpen] = useState(false);
   const [successReport, setSuccessReport] = useState(null);
   const [pdfPreviewing, setPdfPreviewing] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
   const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
   const hasSchoolMaster = states.length > 0 && schools.length > 0;
@@ -153,6 +161,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
   useEffect(() => {
     if (!draftToLoad) return;
     setForm({ ...emptyForm(currentUser), ...draftToLoad });
+    setCurrentStep(1);
     setMessage('Draft loaded.');
     onDraftLoaded?.();
   }, [draftToLoad, currentUser, onDraftLoaded]);
@@ -182,6 +191,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
       remarks: planToConvert.planningNotes || '',
       nextVisitDate: '',
     });
+    setCurrentStep(2);
     setMessage('Plan loaded. Complete the visit details and submit the report.');
     onPlanLoaded?.();
   }, [planToConvert, currentUser, onPlanLoaded]);
@@ -368,6 +378,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
       return;
     }
     setPreviewOpen(true);
+    setCurrentStep(4);
   };
 
   const sendReport = async () => {
@@ -398,6 +409,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
         duplicateReport: response.data.duplicateReport
       });
       setForm(emptyForm(currentUser));
+      setCurrentStep(1);
       localStorage.removeItem('schoolVisitDraft');
       setPhotos([]);
       setPreviewOpen(false);
@@ -413,6 +425,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
 
   const clearDraft = () => {
     setForm(emptyForm(currentUser));
+    setCurrentStep(1);
     setPhotos([]);
     setMessage('');
     setErrors({});
@@ -462,9 +475,9 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
       <div className="panel-header">
         <div>
           <span className="eyebrow">Report creation</span>
-          <h2>New school visit report</h2>
+          <h2>Report wizard</h2>
         </div>
-        <span className="panel-badge">School email</span>
+        <span className="panel-badge">{REPORT_STEPS[currentStep - 1]?.label || 'Review'}</span>
       </div>
 
       {successReport && (
@@ -493,6 +506,32 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
       )}
 
       <form onSubmit={handleSubmit} className="report-flow">
+        <section className="flow-section wizard-step-shell">
+          <div className="wizard-step-header">
+            <div>
+              <span className="eyebrow">Guided flow</span>
+              <h3>{isSchoolVisitMode ? 'Close a visit without wrestling with a long form' : 'Log internal work in a guided flow'}</h3>
+              <p>Move step by step. The app will help build the summary, follow-up, preview, and delivery.</p>
+            </div>
+            <div className="wizard-step-strip">
+              {REPORT_STEPS.map((step) => (
+                <button
+                  key={step.id}
+                  type="button"
+                  className={`wizard-step-chip ${currentStep === step.id ? 'active' : currentStep > step.id ? 'done' : ''}`}
+                  onClick={() => setCurrentStep(step.id)}
+                >
+                  <span>{step.id}</span>
+                  <strong>{step.label}</strong>
+                  <small>{step.note}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {currentStep === 1 && (
+        <>
         <section className="flow-section school-select-section">
           <div className="flow-heading">
             <span>1</span>
@@ -632,7 +671,10 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
             </label>
           </div>
         </section>
+        </>
+        )}
 
+        {currentStep === 2 && (
         <section className="flow-section">
           <div className="flow-heading">
             <span>2</span>
@@ -803,7 +845,9 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
             </label>
           </div>
         </section>
+        )}
 
+        {currentStep === 3 && (
         <section className="flow-section send-section">
           <div className="flow-heading">
             <span>3</span>
@@ -843,12 +887,29 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
             )}
           </div>
         </section>
+        )}
 
         <div className="submit-bar">
           <div>
-            <span>Email report</span>
-            <strong>Draft autosaves locally. PDF will be generated and sent to the school.</strong>
+            <span>{currentStep < 4 ? `Step ${currentStep} of 4` : 'Final review'}</span>
+            <strong>
+              {currentStep === 1 && 'Pick the school or work context first, then move into the actual outcome.'}
+              {currentStep === 2 && 'Capture actual work done and let the app build the summary and action items.'}
+              {currentStep === 3 && 'Add recipients and evidence before preview.'}
+              {currentStep === 4 && 'Preview the final report and confirm before sending.'}
+            </strong>
           </div>
+          <button type="button" className="ghost-button" onClick={() => setCurrentStep((step) => Math.max(1, step - 1))} disabled={loading || currentStep === 1}>
+            Back
+          </button>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => setCurrentStep((step) => Math.min(3, step + 1))}
+            disabled={loading || currentStep >= 3}
+          >
+            Next
+          </button>
           <button type="button" className="ghost-button" onClick={clearDraft} disabled={loading}>
             Clear Draft
           </button>
@@ -859,7 +920,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
             {pdfPreviewing ? 'Preparing...' : 'PDF Preview'}
           </button>
           <button type="submit" disabled={loading} className="primary-button">
-            {loading ? 'Submitting...' : 'Preview Report'}
+            {loading ? 'Submitting...' : 'Open Review'}
           </button>
         </div>
 

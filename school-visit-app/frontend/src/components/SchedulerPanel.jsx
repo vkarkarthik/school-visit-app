@@ -6,6 +6,13 @@ const DAILY_STATUSES = ["Planned", "In Progress", "Closed", "Blocked"];
 const PRIORITY_LEVELS = ["Critical", "High", "Normal"];
 const DEFAULT_VISIBLE_STATUSES = ["Draft", "Confirmed"];
 const DEFAULT_GROUP_VISIBLE_COUNT = 4;
+const WORK_MODE_CHOICES = [
+  ["School Visit", "Field visit with a school, campus, or institution."],
+  ["Work From Home", "Planning, follow-ups, review, reporting, and remote support."],
+  ["Work From Office", "Internal reviews, coordination, admin work, and team operations."],
+  ["Travel", "Transit-heavy day with follow-ups or visit movement."],
+  ["Other", "Use when the day does not fit the usual work buckets."],
+];
 
 function formatDateInput(date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -67,9 +74,12 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
   const [includeClosed, setIncludeClosed] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [visibleCountByGroup, setVisibleCountByGroup] = useState({});
+  const [expandedPlans, setExpandedPlans] = useState({});
   const [editablePlanId, setEditablePlanId] = useState("");
   const [editForms, setEditForms] = useState({});
   const [savingPlanId, setSavingPlanId] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
@@ -252,6 +262,13 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
     }));
   }
 
+  function togglePlanExpanded(planId) {
+    setExpandedPlans((prev) => ({
+      ...prev,
+      [planId]: !prev[planId],
+    }));
+  }
+
   const groupedPlans = useMemo(() => {
     const groups = new Map();
 
@@ -369,21 +386,50 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
 
         {message && <div className="status-text">{message}</div>}
 
-        <form className="report-flow" onSubmit={handleSubmit}>
+        <form className="report-flow quick-plan-shell" onSubmit={handleSubmit}>
+          <div className="planner-speedbar">
+            <div>
+              <span className="eyebrow">Quick entry</span>
+              <strong>Plan in under a minute</strong>
+              <p>Capture the essentials first. Open extra details only when the day needs more context.</p>
+            </div>
+            <button
+              type="button"
+              className="table-action"
+              onClick={() => setDetailsOpen((prev) => !prev)}
+            >
+              {detailsOpen ? "Hide extra details" : "Add more details"}
+            </button>
+          </div>
+
+          <div className="mode-choice-grid">
+            {WORK_MODE_CHOICES.map(([value, note]) => (
+              <button
+                key={value}
+                type="button"
+                className={`mode-choice-card ${form.workMode === value ? "active" : ""}`}
+                onClick={() => handleChange({ target: { name: "workMode", value } })}
+              >
+                <strong>{value}</strong>
+                <span>{note}</span>
+              </button>
+            ))}
+          </div>
+
           <div className="flow-section">
             <div className="flow-heading">
               <span>1</span>
               <div>
-                <h3>{isSchoolVisitMode ? "School and owner" : "Work context and owner"}</h3>
+                <h3>{isSchoolVisitMode ? "Fast visit setup" : "Fast work setup"}</h3>
                 <p>
                   {isSchoolVisitMode
-                    ? "Pick the school, then lock in the PM, purpose, and date."
-                    : "Capture the work context, owner, and the internal task being planned."}
+                    ? "Pick the school, date, and what will happen there."
+                    : "Capture the task, date, and work output for the day."}
                 </p>
               </div>
             </div>
 
-            <div className="form-grid">
+            <div className="form-grid quick-form-grid">
               <label>
                 {isSchoolVisitMode ? "State" : "Region / Team"}
                 {isSchoolVisitMode ? (
@@ -428,35 +474,6 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
               </label>
 
               <label>
-                Program Manager
-                <input
-                  name="programManagerName"
-                  value={form.programManagerName}
-                  onChange={handleChange}
-                  readOnly={!isAdmin}
-                  required
-                />
-              </label>
-
-              <label>
-                Program Manager Email
-                <input
-                  type="email"
-                  name="programManagerEmail"
-                  value={form.programManagerEmail}
-                  onChange={handleChange}
-                  readOnly={!isAdmin}
-                  required
-                />
-              </label>
-
-              {!isAdmin && (
-                <div className="full-span help-text">
-                  Planner entries for PMs are locked to the signed-in SuperTeacher account so plans always save under the correct owner.
-                </div>
-              )}
-
-              <label>
                 {isSchoolVisitMode ? "Purpose of Visit" : "Work Category"}
                 <input
                   name="purposeOfVisit"
@@ -479,27 +496,6 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
               </label>
 
               <label>
-                Work Mode
-                <select name="workMode" value={form.workMode} onChange={handleChange}>
-                  <option>School Visit</option>
-                  <option>Work From Home</option>
-                  <option>Work From Office</option>
-                  <option>Travel</option>
-                  <option>Other</option>
-                </select>
-              </label>
-
-              <label>
-                {isSchoolVisitMode ? "Planned Location" : "Work Location"}
-                <input
-                  name="plannedLocation"
-                  value={form.plannedLocation}
-                  onChange={handleChange}
-                  placeholder="School / Home / Office / City"
-                />
-              </label>
-
-              <label>
                 Planned Date
                 <input type="date" name="plannedDate" value={form.plannedDate} onChange={handleChange} required />
               </label>
@@ -512,17 +508,6 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
               <label>
                 End Time
                 <input type="time" name="plannedEndTime" value={form.plannedEndTime} onChange={handleChange} />
-              </label>
-
-              <label>
-                Status
-                <select name="status" value={form.status} onChange={handleChange}>
-                  {PLAN_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
               </label>
 
               <label>
@@ -568,7 +553,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                 />
               </label>
 
-              {isSchoolVisitMode ? (
+              {isSchoolVisitMode && (
                 <>
                   <label>
                     School Email
@@ -588,44 +573,6 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                   <label>
                     Course / Requirement
                     <input name="course" value={form.course} onChange={handleChange} />
-                  </label>
-                </>
-              ) : (
-                <>
-                  <label>
-                    Internal Stakeholder
-                    <input
-                      name="pointOfContact"
-                      value={form.pointOfContact}
-                      onChange={handleChange}
-                      placeholder="Manager, team lead, ops contact"
-                    />
-                  </label>
-
-                  <label>
-                    Contact Number
-                    <input name="contactNo" value={form.contactNo} onChange={handleChange} placeholder="Optional" />
-                  </label>
-
-                  <label>
-                    Work Email
-                    <input
-                      type="email"
-                      name="schoolEmail"
-                      value={form.schoolEmail}
-                      onChange={handleChange}
-                      placeholder="Optional work recipient"
-                    />
-                  </label>
-
-                  <label>
-                    Program / Focus Area
-                    <input
-                      name="course"
-                      value={form.course}
-                      onChange={handleChange}
-                      placeholder="Content, training, review, operations"
-                    />
                   </label>
                 </>
               )}
@@ -658,10 +605,138 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
             </div>
           </div>
 
-          <div className="submit-bar">
+          {detailsOpen && (
+            <div className="flow-section quick-flow-section">
+              <div className="flow-heading">
+                <span>3</span>
+                <div>
+                  <h3>Extra details</h3>
+                  <p>Use these only when the plan needs richer school, owner, or blocker context.</p>
+                </div>
+              </div>
+
+              <div className="form-grid">
+                <label>
+                  Program Manager
+                  <input
+                    name="programManagerName"
+                    value={form.programManagerName}
+                    onChange={handleChange}
+                    readOnly={!isAdmin}
+                    required
+                  />
+                </label>
+
+                <label>
+                  Program Manager Email
+                  <input
+                    type="email"
+                    name="programManagerEmail"
+                    value={form.programManagerEmail}
+                    onChange={handleChange}
+                    readOnly={!isAdmin}
+                    required
+                  />
+                </label>
+
+                {!isAdmin && (
+                  <div className="full-span help-text">
+                    Planner entries for PMs are locked to the signed-in SuperTeacher account so plans always save under the correct owner.
+                  </div>
+                )}
+
+                <label>
+                  {isSchoolVisitMode ? "Planned Location" : "Work Location"}
+                  <input
+                    name="plannedLocation"
+                    value={form.plannedLocation}
+                    onChange={handleChange}
+                    placeholder="School / Home / Office / City"
+                  />
+                </label>
+
+                <label>
+                  Status
+                  <select name="status" value={form.status} onChange={handleChange}>
+                    {PLAN_STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {!isSchoolVisitMode && (
+                  <>
+                    <label>
+                      Internal Stakeholder
+                      <input
+                        name="pointOfContact"
+                        value={form.pointOfContact}
+                        onChange={handleChange}
+                        placeholder="Manager, team lead, ops contact"
+                      />
+                    </label>
+
+                    <label>
+                      Contact Number
+                      <input name="contactNo" value={form.contactNo} onChange={handleChange} placeholder="Optional" />
+                    </label>
+
+                    <label>
+                      Work Email
+                      <input
+                        type="email"
+                        name="schoolEmail"
+                        value={form.schoolEmail}
+                        onChange={handleChange}
+                        placeholder="Optional work recipient"
+                      />
+                    </label>
+
+                    <label>
+                      Program / Focus Area
+                      <input
+                        name="course"
+                        value={form.course}
+                        onChange={handleChange}
+                        placeholder="Content, training, review, operations"
+                      />
+                    </label>
+                  </>
+                )}
+
+                {isSchoolVisitMode && (
+                  <>
+                    <label>
+                      School Email
+                      <input type="email" name="schoolEmail" value={form.schoolEmail} onChange={handleChange} />
+                    </label>
+
+                    <label>
+                      Contact Number
+                      <input name="contactNo" value={form.contactNo} onChange={handleChange} />
+                    </label>
+
+                    <label>
+                      Point of Contact
+                      <input name="pointOfContact" value={form.pointOfContact} onChange={handleChange} />
+                    </label>
+
+                    <label>
+                      Course / Requirement
+                      <input name="course" value={form.course} onChange={handleChange} />
+                    </label>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="submit-bar planner-submit-bar">
             <span>
               {form.status === "Confirmed"
-                ? "Confirmed plans will be marked ready for calendar sync."
+                ? "Confirmed plans appear in the planner board immediately."
                 : "Draft plans stay private to the PM unless admin views them."}
             </span>
             <button type="submit" disabled={saving}>
@@ -707,8 +782,19 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
             />
             <span>Show completed and cancelled too</span>
           </label>
+
+          <div className="scheduler-toolbar-actions">
+            <button
+              type="button"
+              className="table-action"
+              onClick={() => setFiltersOpen((prev) => !prev)}
+            >
+              {filtersOpen ? "Hide filters" : "Show filters"}
+            </button>
+          </div>
         </div>
 
+        {filtersOpen && (
         <div className="tracking-filter-grid scheduler-filters">
           <label>
             Search
@@ -787,6 +873,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
             </label>
           )}
         </div>
+        )}
 
         {summary && (
           <div className="dashboard-stats compact-stats">
@@ -832,7 +919,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                     {group.plans
                       .slice(0, visibleCountByGroup[group.key] || DEFAULT_GROUP_VISIBLE_COUNT)
                       .map((plan) => (
-                    <article key={plan._id} className="plan-card">
+                    <article key={plan._id} className={`plan-card ${expandedPlans[plan._id] ? "expanded" : "compact"}`}>
                       <div className="plan-card-top">
                         <div>
                           <strong>{plan.schoolName}</strong>
@@ -860,31 +947,31 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
 
                       <div className="plan-copy-block">
                         <span className="eyebrow">Work Planned</span>
-                        <p>{plan.workPlanned}</p>
+                        <p>{expandedPlans[plan._id] ? plan.workPlanned : truncateText(plan.workPlanned, 210)}</p>
                       </div>
 
-                      {plan.planningNotes && (
+                      {expandedPlans[plan._id] && plan.planningNotes && (
                         <div className="plan-copy-block plan-copy-block-notes">
                           <span className="eyebrow">Planning Notes</span>
                           <p>{plan.planningNotes}</p>
                         </div>
                       )}
 
-                      {plan.blockers && (
+                      {expandedPlans[plan._id] && plan.blockers && (
                         <div className="plan-copy-block plan-copy-block-risk">
                           <span className="eyebrow">Blockers / Dependencies</span>
                           <p>{plan.blockers}</p>
                         </div>
                       )}
 
-                      {plan.actualWorkDone && (
+                      {expandedPlans[plan._id] && plan.actualWorkDone && (
                         <div className="plan-copy-block">
                           <span className="eyebrow">Actual Work Done</span>
                           <p>{plan.actualWorkDone}</p>
                         </div>
                       )}
 
-                      {plan.closureNotes && (
+                      {expandedPlans[plan._id] && plan.closureNotes && (
                         <div className="plan-copy-block">
                           <span className="eyebrow">Closure Notes</span>
                           <p>{plan.closureNotes}</p>
@@ -1011,6 +1098,13 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                           <button
                             type="button"
                             className="table-action"
+                            onClick={() => togglePlanExpanded(plan._id)}
+                          >
+                            {expandedPlans[plan._id] ? "Less" : "View details"}
+                          </button>
+                          <button
+                            type="button"
+                            className="table-action"
                             onClick={() => toggleEditor(plan)}
                           >
                             {editablePlanId === plan._id ? "Hide Update" : "Update Day"}
@@ -1080,6 +1174,12 @@ function buildEditForm(plan) {
     actualWorkDone: plan.actualWorkDone || "",
     closureNotes: plan.closureNotes || "",
   };
+}
+
+function truncateText(value, limit = 180) {
+  if (!value) return "No work summary added.";
+  if (value.length <= limit) return value;
+  return `${value.slice(0, limit).trim()}...`;
 }
 
 function Metric({ label, value = 0, tone = "" }) {
