@@ -15,6 +15,13 @@ import { VisitPlan } from "../models/VisitPlan.js";
 import { buildReportHtml } from "../utils/htmlReportTemplate.js";
 import { buildPdfReportHtml } from "../utils/pdfReportTemplate.js";
 
+const ADMIN_EMAILS = new Set([
+  "karthik@superteacher.in",
+  "karthikv@superteacher.in",
+  "vasudevan@superteacher.in",
+  "bhanu@superteacher.in",
+]);
+
 const memoryStorage = multer.memoryStorage();
 export const upload = multer({ storage: memoryStorage });
 const controllerDir = dirname(fileURLToPath(import.meta.url));
@@ -31,6 +38,10 @@ function normalizeWorkMode(value) {
   return ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"].includes(value)
     ? value
     : "School Visit";
+}
+
+function isAdminEmail(value) {
+  return ADMIN_EMAILS.has(String(value || "").trim().toLowerCase());
 }
 
 async function syncPlanToSheets(plan, action) {
@@ -589,10 +600,17 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
 
   const blockedPlans = plans.filter((plan) => plan.dailyStatus === "Blocked");
   const openClosures = todayPlans.filter((plan) => !["Closed"].includes(plan.dailyStatus) && !["Cancelled"].includes(plan.status));
-  const pmRoster = [...allManagerMap.values()].sort((a, b) => a.name.localeCompare(b.name));
-  const todayManagerKeys = new Set(todayPlans.map((plan) => plan.programManagerEmail || plan.programManagerName || "Unknown PM"));
+  const pmRoster = [...allManagerMap.values()]
+    .filter((manager) => !isAdminEmail(manager.email))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const todayManagerKeys = new Set(
+    todayPlans
+      .filter((plan) => !isAdminEmail(plan.programManagerEmail))
+      .map((plan) => plan.programManagerEmail || plan.programManagerName || "Unknown PM")
+  );
   const managersWithoutPlanToday = pmRoster.filter((manager) => !todayManagerKeys.has(manager.key));
   const pmDayBoard = [...planManagerMap.values()]
+    .filter((entry) => !isAdminEmail(entry.email))
     .map((entry) => ({
       ...entry,
       overloaded: entry.todayPlans >= 3 || entry.openPlans >= 5,
@@ -667,11 +685,15 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
         .slice(0, 12),
     },
     dailyOperations: {
-      date: todayStart,
-      totals: {
-        todayPlans: todayPlans.length,
-        pmPlannedToday: new Set(todayPlans.map((plan) => plan.programManagerEmail || plan.programManagerName)).size,
-        pmWithoutPlanToday: managersWithoutPlanToday.length,
+        date: todayStart,
+        totals: {
+          todayPlans: todayPlans.length,
+          pmPlannedToday: new Set(
+            todayPlans
+              .filter((plan) => !isAdminEmail(plan.programManagerEmail))
+              .map((plan) => plan.programManagerEmail || plan.programManagerName)
+          ).size,
+          pmWithoutPlanToday: managersWithoutPlanToday.length,
         dayClosed: todayPlans.filter((plan) => plan.dailyStatus === "Closed").length,
         blocked: blockedPlans.length,
         overdueOpen: overdueOpenPlans.length,
