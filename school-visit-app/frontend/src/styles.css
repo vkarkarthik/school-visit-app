@@ -870,6 +870,23 @@ body {
   color: #173723;
 }
 
+.tracking-link-button {
+  width: auto;
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  text-align: left;
+}
+
+.tracking-link-button:hover:not(:disabled) {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
 .tracking-card-top span,
 .tracking-card-meta span,
 .tracking-card-details span {
@@ -894,6 +911,33 @@ body {
   border-radius: 8px;
   padding: 10px;
   background: var(--surface-soft);
+}
+
+.tracking-detail-card {
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface-soft);
+  color: #173723;
+  box-shadow: none;
+  text-align: left;
+}
+
+.tracking-detail-card:hover:not(:disabled) {
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(37, 142, 208, 0.1);
+  transform: translateY(-1px);
+}
+
+.tracking-detail-card:disabled {
+  opacity: 0.78;
+  cursor: default;
 }
 
 .tracking-card-details span,
@@ -1912,6 +1956,10 @@ tbody tr:last-child td {
   border-radius: 10px;
   padding: 14px;
   background: linear-gradient(180deg, #ffffff, #f7fbf9);
+}
+
+.report-card-clickable {
+  cursor: pointer;
 }
 
 .report-card-top,

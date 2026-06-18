@@ -14,6 +14,56 @@ const WORK_MODE_CHOICES = [
   ["Other", "Use when the day does not fit the usual work buckets."],
 ];
 
+function getWorkModeCopy(workMode) {
+  switch (workMode) {
+    case "Work From Home":
+      return {
+        stepTitle: "Planned remote work",
+        stepNote: "Capture the focused remote work expected from home.",
+        plannedLabel: "Planned Remote Work",
+        plannedPlaceholder: "Lesson planning, follow-up calls, report corrections, content review...",
+        notesLabel: "Remote Work Notes",
+        notesPlaceholder: "Anything ops/admin should know about the remote work for today.",
+      };
+    case "Work From Office":
+      return {
+        stepTitle: "Planned office work",
+        stepNote: "Capture the coordination, review, or admin work expected from office.",
+        plannedLabel: "Planned Office Work",
+        plannedPlaceholder: "Team review, coordinator sync, system updates, proposal review, ops work...",
+        notesLabel: "Office Work Notes",
+        notesPlaceholder: "Anything ops/admin should know about the office work for today.",
+      };
+    case "Travel":
+      return {
+        stepTitle: "Travel plan",
+        stepNote: "Capture movement, transit purpose, and the work expected during or around travel.",
+        plannedLabel: "Travel Plan / Travel Work",
+        plannedPlaceholder: "Travel to school, en route follow-up calls, material movement, transit coordination...",
+        notesLabel: "Travel Notes",
+        notesPlaceholder: "Route, transit dependency, city movement, or any travel blocker for the day.",
+      };
+    case "Other":
+      return {
+        stepTitle: "Planned special work",
+        stepNote: "Capture the non-standard day plan clearly so admin can understand the context fast.",
+        plannedLabel: "Planned Special Work",
+        plannedPlaceholder: "Workshop support, event prep, audit work, special assignment, documentation...",
+        notesLabel: "Special Work Notes",
+        notesPlaceholder: "Anything unusual or context-specific that leadership should know.",
+      };
+    default:
+      return {
+        stepTitle: "Planned internal work",
+        stepNote: "Capture the internal work expected from home, office, travel, or other non-school modes.",
+        plannedLabel: "Planned Work Items",
+        plannedPlaceholder: "Proposal preparation, lesson planning, report corrections, follow-up calls, content review...",
+        notesLabel: "Work Notes",
+        notesPlaceholder: "Anything ops/admin should know before the internal work starts.",
+      };
+  }
+}
+
 function formatDateInput(date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
@@ -84,6 +134,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
   const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
   const isSchoolVisitMode = form.workMode === "School Visit";
+  const workModeCopy = useMemo(() => getWorkModeCopy(form.workMode), [form.workMode]);
 
   useEffect(() => {
     setForm((prev) => ({
@@ -359,6 +410,11 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
     const payload = editForms[plan._id];
     if (!payload) return;
 
+    if (payload.dailyStatus === "Closed" && !String(payload.actualWorkDone || "").trim()) {
+      setMessage("Actual work done is required before closing the day.");
+      return;
+    }
+
     setSavingPlanId(plan._id);
     setMessage("");
     try {
@@ -527,18 +583,18 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
             <div className="flow-heading">
               <span>2</span>
               <div>
-                <h3>{isSchoolVisitMode ? "Planned work" : "Planned internal work"}</h3>
+                <h3>{isSchoolVisitMode ? "Planned work" : workModeCopy.stepTitle}</h3>
                 <p>
                   {isSchoolVisitMode
                     ? "Capture exactly what work is expected on the ground."
-                    : "Capture the internal work expected from home, office, travel, or other non-school modes."}
+                    : workModeCopy.stepNote}
                 </p>
               </div>
             </div>
 
             <div className="form-grid">
               <label className="full-span">
-                {isSchoolVisitMode ? "Work Planned" : "Planned Work Items"}
+                {isSchoolVisitMode ? "Work Planned" : workModeCopy.plannedLabel}
                 <textarea
                   name="workPlanned"
                   rows="4"
@@ -547,7 +603,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                   placeholder={
                     isSchoolVisitMode
                       ? "Teacher induction, robotics demo, material handover, follow-up review..."
-                      : "Proposal preparation, lesson planning, report corrections, follow-up calls, content review..."
+                      : workModeCopy.plannedPlaceholder
                   }
                   required
                 />
@@ -578,7 +634,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
               )}
 
               <label className="full-span">
-                {isSchoolVisitMode ? "Planning Notes" : "Work Notes"}
+                {isSchoolVisitMode ? "Planning Notes" : workModeCopy.notesLabel}
                 <textarea
                   name="planningNotes"
                   rows="3"
@@ -587,7 +643,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                   placeholder={
                     isSchoolVisitMode
                       ? "Anything ops/admin should know before the visit."
-                      : "Anything ops/admin should know before the internal work starts."
+                      : workModeCopy.notesPlaceholder
                   }
                 />
               </label>

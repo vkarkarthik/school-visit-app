@@ -186,6 +186,42 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
     }
   };
 
+  const openTimelineForReport = async (report) => {
+    setFilters((prev) => ({
+      ...prev,
+      schoolName: report.schoolName || '',
+      state: report.state || prev.state
+    }));
+    setViewMode('timeline');
+    setLoading(true);
+    setMessage('');
+    try {
+      const response = await api.get('/reports/timeline', {
+        params: { schoolName: report.schoolName, state: report.state }
+      });
+      setTimeline(response.data.reports || []);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Failed to load school timeline.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openEditForReport = (report) => {
+    if (!isAdmin) return;
+    setEditingReport(report);
+  };
+
+  const openActionDeskForReport = (report) => {
+    setViewMode('actions');
+    const pendingCount = (report.actionItemsDetailed || []).filter((item) => item.status !== 'Completed').length;
+    setMessage(
+      pendingCount
+        ? `Showing action desk for ${report.schoolName}.`
+        : `No pending action items for ${report.schoolName}.`
+    );
+  };
+
   const saveCorrection = async () => {
     if (!editingReport) return;
 
@@ -466,7 +502,9 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
               <article key={report._id} className="tracking-card">
                 <div className="tracking-card-top">
                   <div>
-                    <strong>{report.schoolName}</strong>
+                    <button type="button" className="tracking-link-button" onClick={() => openTimelineForReport(report)}>
+                      <strong>{report.schoolName}</strong>
+                    </button>
                     <span>
                       {new Date(report.visitDate).toLocaleDateString('en-IN')} | {report.purposeOfVisit}
                     </span>
@@ -484,28 +522,28 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
                 </div>
 
                 <div className="tracking-card-details">
-                  <div>
+                  <button type="button" className="tracking-detail-card" onClick={() => openEditForReport(report)} disabled={!isAdmin}>
                     <span>Sheet</span>
                     <strong>{report.isNewSchool ? report.newSchoolSheetStatus || 'Pending' : 'NA'}</strong>
-                  </div>
-                  <div>
+                  </button>
+                  <button type="button" className="tracking-detail-card" onClick={() => openEditForReport(report)} disabled={!isAdmin}>
                     <span>Lead Stage</span>
                     <strong>{report.salesLeadStatus || 'Not Required'}</strong>
-                  </div>
-                  <div>
+                  </button>
+                  <button type="button" className="tracking-detail-card" onClick={() => resendReport(report._id)} disabled={!isAdmin || loading}>
                     <span>Resends</span>
                     <strong>{report.resendCount || 0}</strong>
-                  </div>
-                  <div>
+                  </button>
+                  <button type="button" className="tracking-detail-card" onClick={() => openTimelineForReport(report)} disabled={loading}>
                     <span>Next Follow-up</span>
                     <strong>
                       {report.nextVisitDate ? new Date(report.nextVisitDate).toLocaleDateString('en-IN') : 'Not planned'}
                     </strong>
-                  </div>
-                  <div>
+                  </button>
+                  <button type="button" className="tracking-detail-card" onClick={() => openActionDeskForReport(report)}>
                     <span>Pending Actions</span>
                     <strong>{pendingActions}</strong>
-                  </div>
+                  </button>
                 </div>
 
                 <div className="tracking-card-actions">
@@ -575,7 +613,31 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
           ) : (
             <div className="report-card-grid">
               {pendingActionItems.map((item) => (
-                <article key={`${item.reportId}-${item._id || item.title}`} className="report-card">
+                <article
+                  key={`${item.reportId}-${item._id || item.title}`}
+                  className="report-card report-card-clickable"
+                  onClick={() => {
+                    const linkedReport = reports.find((report) => report._id === item.reportId);
+                    if (linkedReport) {
+                      openEditForReport(linkedReport);
+                    } else {
+                      setMessage(`Open the related report for ${item.schoolName} from Card View to resolve this item.`);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      const linkedReport = reports.find((report) => report._id === item.reportId);
+                      if (linkedReport) {
+                        openEditForReport(linkedReport);
+                      } else {
+                        setMessage(`Open the related report for ${item.schoolName} from Card View to resolve this item.`);
+                      }
+                    }
+                  }}
+                >
                   <div className="report-card-top">
                     <div>
                       <strong>{item.schoolName}</strong>
