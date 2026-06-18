@@ -47,6 +47,27 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
   const hasSchoolMaster = states.length > 0 && schools.length > 0;
 
+  const fetchTracking = async (nextFilters, nextViewMode = viewMode, successMessage = '') => {
+    setLoading(true);
+    setMessage('');
+    setViewMode(nextViewMode);
+    try {
+      const params = Object.fromEntries(Object.entries(nextFilters).filter(([, value]) => value !== ''));
+      const response = await api.get('/reports/tracking', { params });
+      setFilters(nextFilters);
+      setSummary(response.data.summary);
+      setReports(response.data.reports);
+      setPendingActionItems(response.data.pendingActionItems || []);
+      if (successMessage) {
+        setMessage(successMessage);
+      }
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Failed to load tracking.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredSchools = useMemo(() => {
     return schools
       .filter((school) => school.state === filters.state)
@@ -83,19 +104,7 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
   };
 
   const handleLoad = async () => {
-    setLoading(true);
-    setMessage('');
-    try {
-      const params = Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== ''));
-      const response = await api.get('/reports/tracking', { params });
-      setSummary(response.data.summary);
-      setReports(response.data.reports);
-      setPendingActionItems(response.data.pendingActionItems || []);
-    } catch (error) {
-      setMessage(error.response?.data?.message || 'Failed to load tracking.');
-    } finally {
-      setLoading(false);
-    }
+    await fetchTracking(filters, viewMode);
   };
 
   const exportCsv = () => {
@@ -186,50 +195,63 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
     }
   };
 
-  const applyTrackingShortcut = (shortcut) => {
+  const applyTrackingShortcut = async (shortcut) => {
+    const baseFilters = {
+      ...filters,
+      emailStatus: '',
+      isNewSchool: '',
+      newSchoolApprovalStatus: '',
+      salesLeadStatus: ''
+    };
+
     if (shortcut === 'all') {
-      setViewMode('cards');
-      setMessage('Showing all tracking cards.');
+      await fetchTracking(baseFilters, 'cards', 'Showing all tracking cards.');
       return;
     }
 
     if (shortcut === 'sent') {
-      setViewMode('cards');
-      setFilters((prev) => ({ ...prev, emailStatus: 'Sent' }));
-      setMessage('Filtered to sent reports. Click Load Tracking to refresh.');
+      await fetchTracking(
+        { ...baseFilters, emailStatus: 'Sent' },
+        'cards',
+        'Showing sent reports.'
+      );
       return;
     }
 
     if (shortcut === 'failed') {
-      setViewMode('cards');
-      setFilters((prev) => ({ ...prev, emailStatus: 'Failed' }));
-      setMessage('Filtered to failed reports. Click Load Tracking to refresh.');
+      await fetchTracking(
+        { ...baseFilters, emailStatus: 'Failed' },
+        'cards',
+        'Showing failed reports.'
+      );
       return;
     }
 
     if (shortcut === 'newSchools') {
-      setViewMode('cards');
-      setFilters((prev) => ({ ...prev, isNewSchool: 'true' }));
-      setMessage('Filtered to new or prospect schools. Click Load Tracking to refresh.');
+      await fetchTracking(
+        { ...baseFilters, isNewSchool: 'true' },
+        'cards',
+        'Showing new and prospect school reports.'
+      );
       return;
     }
 
     if (shortcut === 'pendingLeads') {
-      setViewMode('cards');
-      setFilters((prev) => ({ ...prev, salesLeadStatus: 'Pending' }));
-      setMessage('Filtered to pending leads. Click Load Tracking to refresh.');
+      await fetchTracking(
+        { ...baseFilters, isNewSchool: 'true', salesLeadStatus: 'Pending' },
+        'cards',
+        'Showing pending leads.'
+      );
       return;
     }
 
     if (shortcut === 'pendingActions') {
-      setViewMode('actions');
-      setMessage('Showing pending action desk.');
+      await fetchTracking(baseFilters, 'actions', 'Showing pending action desk.');
       return;
     }
 
     if (shortcut === 'overdueFollowUps') {
-      setViewMode('cards');
-      setMessage('Showing loaded cards. Focus on reports with overdue follow-ups.');
+      await fetchTracking(baseFilters, 'cards', 'Showing loaded cards with overdue follow-ups highlighted below.');
       return;
     }
 
@@ -552,7 +574,13 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
               (report.actionItemsDetailed || []).filter((item) => item.status !== 'Completed').length || 0;
 
             return (
-              <article key={report._id} className="tracking-card">
+                <article
+                  key={report._id}
+                  className="tracking-card"
+                  data-overdue-followup={
+                    report.nextVisitDate && new Date(report.nextVisitDate) < new Date() ? 'true' : 'false'
+                  }
+                >
                 <div className="tracking-card-top">
                   <div>
                     <button type="button" className="tracking-link-button" onClick={() => openTimelineForReport(report)}>
