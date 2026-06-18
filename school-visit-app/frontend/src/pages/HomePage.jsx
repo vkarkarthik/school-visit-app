@@ -25,10 +25,14 @@ const emptyUser = {
 };
 
 function normalizeUser(user) {
+  const email = String(user?.email || '');
+  const normalizedEmail = email.trim().toLowerCase();
+  const derivedRole = ADMIN_EMAILS.has(normalizedEmail) ? 'Admin / Team Lead' : String(user?.role || 'Program Manager');
+
   return {
     name: String(user?.name || ''),
-    email: String(user?.email || ''),
-    role: String(user?.role || 'Program Manager'),
+    email,
+    role: derivedRole,
     authProvider: String(user?.authProvider || ''),
     credential: String(user?.credential || ''),
     picture: String(user?.picture || '')
@@ -61,6 +65,7 @@ export default function HomePage() {
     String(currentUser.name || '').trim() &&
     /^[^\s@]+@superteacher\.in$/i.test(String(currentUser.email || '').trim());
   const isAdmin = ADMIN_EMAILS.has(String(currentUser.email || '').trim().toLowerCase());
+  const displayRole = isAdmin ? 'Admin / Team Lead' : currentUser.role || 'Program Manager';
 
   useEffect(() => {
     const allowedViews = isAdmin
@@ -106,7 +111,7 @@ export default function HomePage() {
         <div className="topbar-meta">
           <span>{schoolMaster.schools.length} schools loaded</span>
           <span>{schoolMaster.states.length} regions</span>
-          <span>{currentUser.role}</span>
+          <span>{displayRole}</span>
         </div>
       </header>
 
@@ -167,7 +172,7 @@ export default function HomePage() {
               </label>
               <label>
                 Role
-                <input value={isAdmin ? 'Admin / Operations' : currentUser.role} readOnly />
+                <input value={displayRole} readOnly />
               </label>
             </div>
           </section>
