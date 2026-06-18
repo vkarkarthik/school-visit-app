@@ -113,8 +113,8 @@ export default function HomePage() {
       <main className="page-shell">
         <section className="workspace-header">
           <div>
-            <span className="eyebrow">Program manager workspace</span>
-            <h1>Visit reports and school follow-ups</h1>
+            <span className="eyebrow">Program manager operations</span>
+            <h1>Field execution, internal work, and visit accountability</h1>
           </div>
           <div className="header-actions">
             <div className="header-stat">
@@ -199,7 +199,7 @@ export default function HomePage() {
                 className={activeView === 'scheduler' ? 'active' : ''}
                 onClick={() => setActiveView('scheduler')}
               >
-                Scheduler
+                Daily Planner
               </button>
               <button
                 type="button"
@@ -229,7 +229,7 @@ export default function HomePage() {
                     className={activeView === 'dashboard' ? 'active' : ''}
                     onClick={() => setActiveView('dashboard')}
                   >
-                    Admin Dashboard
+                    Ops Dashboard
                   </button>
                   <button
                     type="button"

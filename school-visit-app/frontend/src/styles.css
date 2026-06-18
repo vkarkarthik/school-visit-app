@@ -694,6 +694,13 @@ body {
   line-height: 1.5;
 }
 
+.status-pair {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .plan-copy-block {
   margin: 0 0 12px;
   padding: 10px 12px;
@@ -713,10 +720,43 @@ body {
   background: var(--surface-soft);
 }
 
+.plan-copy-block-risk {
+  background: #fff8f0;
+}
+
 .plan-status-stack {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.plan-editor {
+  margin-bottom: 12px;
+  border: 1px solid #c7e9f8;
+  border-radius: 10px;
+  padding: 14px;
+  background: #f4fbff;
+}
+
+.plan-editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.plan-editor-head strong {
+  color: #173723;
+}
+
+.plan-editor-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.plan-editor-actions {
+  margin-top: 10px;
 }
 
 .status-pill.info {
@@ -1489,6 +1529,28 @@ tbody tr:last-child td {
   gap: 14px;
 }
 
+.ops-command-board {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: linear-gradient(180deg, #ffffff, #f7fbff);
+}
+
+.ops-command-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ops-command-head h3 {
+  margin: 4px 0 0;
+  color: #173723;
+  font-size: 18px;
+}
+
 .planner-dashboard-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1575,6 +1637,64 @@ tbody tr:last-child td {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+
+.ops-pm-board {
+  display: grid;
+  gap: 10px;
+}
+
+.ops-pm-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--surface-soft);
+}
+
+.ops-pm-card.warning {
+  background: #fffdf2;
+}
+
+.ops-pm-card.risk {
+  background: #fff3f2;
+}
+
+.ops-pm-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ops-pm-card-top strong {
+  display: block;
+  color: #173723;
+}
+
+.ops-pm-card-top span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ops-pm-badges,
+.ops-pm-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ops-pm-metrics {
+  margin-top: 10px;
+}
+
+.ops-pm-metrics span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #ffffff;
+  color: #294433;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .planner-manager-mix span {

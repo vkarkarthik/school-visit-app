@@ -453,6 +453,8 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
   todayEnd.setDate(todayEnd.getDate() + 1);
   const nextWeekEnd = new Date(todayStart);
   nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
+  const nextMonthEnd = new Date(todayStart);
+  nextMonthEnd.setDate(nextMonthEnd.getDate() + 30);
   const year = Number(req.query.year || now.getFullYear());
   const yearStart = new Date(year, 0, 1);
   const yearEnd = new Date(year + 1, 0, 1);
@@ -475,16 +477,34 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
   const planStatusMap = new Map();
   const planManagerMap = new Map();
   const planDateMap = new Map();
+  const allManagerMap = new Map();
+  const workModeMap = new Map();
 
   for (const report of reports) {
     managerMap.set(report.programManagerName, (managerMap.get(report.programManagerName) || 0) + 1);
     purposeMap.set(report.purposeOfVisit, (purposeMap.get(report.purposeOfVisit) || 0) + 1);
+    const managerKey = report.programManagerEmail || report.programManagerName || "Unknown PM";
+    if (!allManagerMap.has(managerKey)) {
+      allManagerMap.set(managerKey, {
+        key: managerKey,
+        name: report.programManagerName || "Unknown PM",
+        email: report.programManagerEmail || "",
+      });
+    }
   }
 
   for (const plan of plans) {
     planStatusMap.set(plan.status, (planStatusMap.get(plan.status) || 0) + 1);
+    workModeMap.set(plan.workMode || "School Visit", (workModeMap.get(plan.workMode || "School Visit") || 0) + 1);
 
     const managerKey = plan.programManagerEmail || plan.programManagerName || "Unknown PM";
+    if (!allManagerMap.has(managerKey)) {
+      allManagerMap.set(managerKey, {
+        key: managerKey,
+        name: plan.programManagerName || "Unknown PM",
+        email: plan.programManagerEmail || "",
+      });
+    }
     if (!planManagerMap.has(managerKey)) {
       planManagerMap.set(managerKey, {
         key: managerKey,
@@ -495,12 +515,28 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
         confirmed: 0,
         completed: 0,
         cancelled: 0,
+        planned: 0,
+        inProgress: 0,
+        closed: 0,
+        blocked: 0,
+        field: 0,
+        internal: 0,
+        todayPlans: 0,
+        todayClosed: 0,
+        overdueOpen: 0,
+        openPlans: 0,
       });
     }
 
     const managerEntry = planManagerMap.get(managerKey);
     managerEntry.total += 1;
     managerEntry[String(plan.status || "").toLowerCase()] += 1;
+    if (plan.dailyStatus === "Planned") managerEntry.planned += 1;
+    if (plan.dailyStatus === "In Progress") managerEntry.inProgress += 1;
+    if (plan.dailyStatus === "Closed") managerEntry.closed += 1;
+    if (plan.dailyStatus === "Blocked") managerEntry.blocked += 1;
+    if (plan.workMode === "School Visit") managerEntry.field += 1;
+    if (plan.workMode !== "School Visit") managerEntry.internal += 1;
 
     const dateKey = new Date(plan.plannedDate).toISOString().slice(0, 10);
     if (!planDateMap.has(dateKey)) {
@@ -517,6 +553,16 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
     const dateEntry = planDateMap.get(dateKey);
     dateEntry.total += 1;
     dateEntry[String(plan.status || "").toLowerCase()] += 1;
+
+    const plannedDate = new Date(plan.plannedDate);
+    const isToday = plannedDate >= todayStart && plannedDate < todayEnd;
+    const isOpen = ["Draft", "Confirmed"].includes(plan.status) && plan.dailyStatus !== "Closed";
+    if (isToday) {
+      managerEntry.todayPlans += 1;
+      if (plan.dailyStatus === "Closed") managerEntry.todayClosed += 1;
+    }
+    if (isOpen) managerEntry.openPlans += 1;
+    if (isOpen && plannedDate < todayStart) managerEntry.overdueOpen += 1;
   }
 
   const pendingActionItems = reports.flatMap((report) =>
@@ -530,6 +576,34 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
         ...item,
       }))
   );
+
+  const todayPlans = plans.filter((plan) => {
+    const plannedDate = new Date(plan.plannedDate);
+    return plannedDate >= todayStart && plannedDate < todayEnd;
+  });
+
+  const overdueOpenPlans = plans.filter((plan) => {
+    const plannedDate = new Date(plan.plannedDate);
+    return ["Draft", "Confirmed"].includes(plan.status) && plan.dailyStatus !== "Closed" && plannedDate < todayStart;
+  });
+
+  const blockedPlans = plans.filter((plan) => plan.dailyStatus === "Blocked");
+  const openClosures = todayPlans.filter((plan) => !["Closed"].includes(plan.dailyStatus) && !["Cancelled"].includes(plan.status));
+  const pmRoster = [...allManagerMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const todayManagerKeys = new Set(todayPlans.map((plan) => plan.programManagerEmail || plan.programManagerName || "Unknown PM"));
+  const managersWithoutPlanToday = pmRoster.filter((manager) => !todayManagerKeys.has(manager.key));
+  const pmDayBoard = [...planManagerMap.values()]
+    .map((entry) => ({
+      ...entry,
+      overloaded: entry.todayPlans >= 3 || entry.openPlans >= 5,
+      closurePending: entry.todayPlans > entry.todayClosed,
+    }))
+    .sort((a, b) => {
+      if (b.blocked !== a.blocked) return b.blocked - a.blocked;
+      if (b.overdueOpen !== a.overdueOpen) return b.overdueOpen - a.overdueOpen;
+      if (b.todayPlans !== a.todayPlans) return b.todayPlans - a.todayPlans;
+      return a.name.localeCompare(b.name);
+    });
 
   res.json({
     success: true,
@@ -591,6 +665,42 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
         })
         .sort((a, b) => new Date(a.plannedDate) - new Date(b.plannedDate))
         .slice(0, 12),
+    },
+    dailyOperations: {
+      date: todayStart,
+      totals: {
+        todayPlans: todayPlans.length,
+        pmPlannedToday: new Set(todayPlans.map((plan) => plan.programManagerEmail || plan.programManagerName)).size,
+        pmWithoutPlanToday: managersWithoutPlanToday.length,
+        dayClosed: todayPlans.filter((plan) => plan.dailyStatus === "Closed").length,
+        blocked: blockedPlans.length,
+        overdueOpen: overdueOpenPlans.length,
+        fieldWork: todayPlans.filter((plan) => plan.workMode === "School Visit").length,
+        internalWork: todayPlans.filter((plan) => plan.workMode !== "School Visit").length,
+        closurePending: openClosures.length,
+      },
+      workModeMix: [...workModeMap.entries()]
+        .map(([mode, count]) => ({ mode, count }))
+        .sort((a, b) => b.count - a.count),
+      managersWithoutPlanToday,
+      blockedPlans: blockedPlans
+        .sort((a, b) => new Date(a.plannedDate) - new Date(b.plannedDate))
+        .slice(0, 10),
+      overdueOpenPlans: overdueOpenPlans
+        .sort((a, b) => new Date(a.plannedDate) - new Date(b.plannedDate))
+        .slice(0, 10),
+      pmDayBoard: pmDayBoard.slice(0, 20),
+      focusPlans: todayPlans
+        .filter((plan) => ["Critical", "High"].includes(plan.priorityLevel || "Normal"))
+        .sort((a, b) => {
+          const priorityOrder = { Critical: 0, High: 1, Normal: 2 };
+          return (priorityOrder[a.priorityLevel || "Normal"] ?? 2) - (priorityOrder[b.priorityLevel || "Normal"] ?? 2);
+        })
+        .slice(0, 12),
+      nextThirtyDaysOpen: plans.filter((plan) => {
+        const plannedDate = new Date(plan.plannedDate);
+        return ["Draft", "Confirmed"].includes(plan.status) && plannedDate >= todayStart && plannedDate < nextMonthEnd;
+      }).length,
     },
   });
 });

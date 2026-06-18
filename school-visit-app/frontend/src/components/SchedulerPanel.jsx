@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 
 const PLAN_STATUSES = ["Draft", "Confirmed", "Completed", "Cancelled"];
+const DAILY_STATUSES = ["Planned", "In Progress", "Closed", "Blocked"];
+const PRIORITY_LEVELS = ["Critical", "High", "Normal"];
 const DEFAULT_VISIBLE_STATUSES = ["Draft", "Confirmed"];
 const DEFAULT_GROUP_VISIBLE_COUNT = 4;
 
@@ -34,6 +36,12 @@ const emptyForm = (currentUser = {}) => ({
   programManagerEmail: currentUser?.email || "",
   workMode: "School Visit",
   plannedLocation: "",
+  priorityLevel: "Normal",
+  dailyStatus: "Planned",
+  blockers: "",
+  actualLocation: "",
+  actualWorkDone: "",
+  closureNotes: "",
 });
 
 export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onConvertToReport }) {
@@ -59,6 +67,9 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
   const [includeClosed, setIncludeClosed] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [visibleCountByGroup, setVisibleCountByGroup] = useState({});
+  const [editablePlanId, setEditablePlanId] = useState("");
+  const [editForms, setEditForms] = useState({});
+  const [savingPlanId, setSavingPlanId] = useState("");
 
   const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
@@ -297,6 +308,54 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
     });
   }, [groupedPlans]);
 
+  useEffect(() => {
+    setEditForms((prev) => {
+      const next = { ...prev };
+      for (const plan of plans) {
+        if (!next[plan._id]) {
+          next[plan._id] = buildEditForm(plan);
+        }
+      }
+      return next;
+    });
+  }, [plans]);
+
+  function toggleEditor(plan) {
+    setEditablePlanId((prev) => (prev === plan._id ? "" : plan._id));
+    setEditForms((prev) => ({
+      ...prev,
+      [plan._id]: buildEditForm(plan),
+    }));
+  }
+
+  function updateEditField(planId, field, value) {
+    setEditForms((prev) => ({
+      ...prev,
+      [planId]: {
+        ...prev[planId],
+        [field]: value,
+      },
+    }));
+  }
+
+  async function savePlanUpdate(plan) {
+    const payload = editForms[plan._id];
+    if (!payload) return;
+
+    setSavingPlanId(plan._id);
+    setMessage("");
+    try {
+      const response = await api.patch(`/plans/${plan._id}`, payload);
+      setMessage(response.data.message || "Plan updated.");
+      setEditablePlanId("");
+      await loadPlans();
+    } catch (error) {
+      setMessage(error.response?.data?.message || "Could not update plan.");
+    } finally {
+      setSavingPlanId("");
+    }
+  }
+
   return (
     <section className="scheduler-shell">
       <section className="panel report-panel scheduler-panel">
@@ -409,6 +468,17 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
               </label>
 
               <label>
+                Priority
+                <select name="priorityLevel" value={form.priorityLevel} onChange={handleChange}>
+                  {PRIORITY_LEVELS.map((level) => (
+                    <option key={level} value={level}>
+                      {level}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
                 Work Mode
                 <select name="workMode" value={form.workMode} onChange={handleChange}>
                   <option>School Visit</option>
@@ -448,6 +518,17 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                 Status
                 <select name="status" value={form.status} onChange={handleChange}>
                   {PLAN_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Day Status
+                <select name="dailyStatus" value={form.dailyStatus} onChange={handleChange}>
+                  {DAILY_STATUSES.map((status) => (
                     <option key={status} value={status}>
                       {status}
                     </option>
@@ -561,6 +642,17 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                       ? "Anything ops/admin should know before the visit."
                       : "Anything ops/admin should know before the internal work starts."
                   }
+                />
+              </label>
+
+              <label className="full-span">
+                Blockers / Dependencies
+                <textarea
+                  name="blockers"
+                  rows="2"
+                  value={form.blockers}
+                  onChange={handleChange}
+                  placeholder="What can stop this work, who needs to unblock it, or what dependency is pending?"
                 />
               </label>
             </div>
@@ -704,6 +796,8 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
             <Metric label="Completed" value={summary.completedPlans} tone="green" />
             <Metric label="Cancelled" value={summary.cancelledPlans} tone="red" />
             <Metric label="Converted" value={summary.convertedPlans} tone="green" />
+            <Metric label="Closed Day" value={summary.closedDayCount} tone="green" />
+            <Metric label="Blocked" value={summary.blockedCount} tone="red" />
           </div>
         )}
 
@@ -746,7 +840,10 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                             {new Date(plan.plannedDate).toLocaleDateString("en-IN")} | {plan.purposeOfVisit}
                           </span>
                         </div>
-                        <span className={`status-pill ${getStatusTone(plan.status)}`}>{plan.status}</span>
+                        <div className="status-pair">
+                          <span className={`status-pill ${getStatusTone(plan.status)}`}>{plan.status}</span>
+                          <span className={`status-pill ${getDailyTone(plan.dailyStatus)}`}>{plan.dailyStatus || "Planned"}</span>
+                        </div>
                       </div>
 
                       <div className="plan-meta">
@@ -758,6 +855,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                         </span>
                         <span>{plan.workMode || "School Visit"}</span>
                         <span>{plan.plannedLocation || "Location not added"}</span>
+                        <span>Priority: {plan.priorityLevel || "Normal"}</span>
                       </div>
 
                       <div className="plan-copy-block">
@@ -772,10 +870,128 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                         </div>
                       )}
 
+                      {plan.blockers && (
+                        <div className="plan-copy-block plan-copy-block-risk">
+                          <span className="eyebrow">Blockers / Dependencies</span>
+                          <p>{plan.blockers}</p>
+                        </div>
+                      )}
+
                       {plan.actualWorkDone && (
                         <div className="plan-copy-block">
                           <span className="eyebrow">Actual Work Done</span>
                           <p>{plan.actualWorkDone}</p>
+                        </div>
+                      )}
+
+                      {plan.closureNotes && (
+                        <div className="plan-copy-block">
+                          <span className="eyebrow">Closure Notes</span>
+                          <p>{plan.closureNotes}</p>
+                        </div>
+                      )}
+
+                      {editablePlanId === plan._id && (
+                        <div className="plan-editor">
+                          <div className="plan-editor-head">
+                            <strong>Daily accountability update</strong>
+                            <span>Use this to mark progress, close the day, or flag blockers.</span>
+                          </div>
+                          <div className="form-grid">
+                            <label>
+                              Day Status
+                              <select
+                                value={editForms[plan._id]?.dailyStatus || "Planned"}
+                                onChange={(e) => updateEditField(plan._id, "dailyStatus", e.target.value)}
+                              >
+                                {DAILY_STATUSES.map((status) => (
+                                  <option key={status} value={status}>
+                                    {status}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label>
+                              Priority
+                              <select
+                                value={editForms[plan._id]?.priorityLevel || "Normal"}
+                                onChange={(e) => updateEditField(plan._id, "priorityLevel", e.target.value)}
+                              >
+                                {PRIORITY_LEVELS.map((level) => (
+                                  <option key={level} value={level}>
+                                    {level}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label>
+                              Actual Location
+                              <input
+                                value={editForms[plan._id]?.actualLocation || ""}
+                                onChange={(e) => updateEditField(plan._id, "actualLocation", e.target.value)}
+                                placeholder="Where the work actually happened"
+                              />
+                            </label>
+
+                            <label>
+                              Planned Location
+                              <input
+                                value={editForms[plan._id]?.plannedLocation || ""}
+                                onChange={(e) => updateEditField(plan._id, "plannedLocation", e.target.value)}
+                                placeholder="Update planned location if needed"
+                              />
+                            </label>
+
+                            <label className="full-span">
+                              Actual Work Done
+                              <textarea
+                                rows="4"
+                                value={editForms[plan._id]?.actualWorkDone || ""}
+                                onChange={(e) => updateEditField(plan._id, "actualWorkDone", e.target.value)}
+                                placeholder="What was actually completed today?"
+                              />
+                            </label>
+
+                            <label className="full-span">
+                              Blockers / Dependencies
+                              <textarea
+                                rows="3"
+                                value={editForms[plan._id]?.blockers || ""}
+                                onChange={(e) => updateEditField(plan._id, "blockers", e.target.value)}
+                                placeholder="Any blocker, pending dependency, or escalation needed"
+                              />
+                            </label>
+
+                            <label className="full-span">
+                              Closure Notes
+                              <textarea
+                                rows="3"
+                                value={editForms[plan._id]?.closureNotes || ""}
+                                onChange={(e) => updateEditField(plan._id, "closureNotes", e.target.value)}
+                                placeholder="Final owner note for the day"
+                              />
+                            </label>
+                          </div>
+
+                          <div className="row-actions plan-editor-actions">
+                            <button
+                              type="button"
+                              className="table-action"
+                              onClick={() => toggleEditor(plan)}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              className="table-action"
+                              onClick={() => savePlanUpdate(plan)}
+                              disabled={savingPlanId === plan._id}
+                            >
+                              {savingPlanId === plan._id ? "Saving..." : "Save day update"}
+                            </button>
+                          </div>
                         </div>
                       )}
 
@@ -792,6 +1008,13 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                           {plan.convertedReportId && <span className="muted-text">Converted to report</span>}
                         </div>
                         <div className="row-actions">
+                          <button
+                            type="button"
+                            className="table-action"
+                            onClick={() => toggleEditor(plan)}
+                          >
+                            {editablePlanId === plan._id ? "Hide Update" : "Update Day"}
+                          </button>
                           <button
                             type="button"
                             className="table-action"
@@ -847,6 +1070,18 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
   );
 }
 
+function buildEditForm(plan) {
+  return {
+    plannedLocation: plan.plannedLocation || "",
+    priorityLevel: plan.priorityLevel || "Normal",
+    dailyStatus: plan.dailyStatus || "Planned",
+    blockers: plan.blockers || "",
+    actualLocation: plan.actualLocation || "",
+    actualWorkDone: plan.actualWorkDone || "",
+    closureNotes: plan.closureNotes || "",
+  };
+}
+
 function Metric({ label, value = 0, tone = "" }) {
   return (
     <div className={`metric-card ${tone}`}>
@@ -860,6 +1095,13 @@ function getStatusTone(status) {
   if (status === "Completed") return "sent";
   if (status === "Cancelled") return "failed";
   if (status === "Confirmed") return "info";
+  return "warning";
+}
+
+function getDailyTone(status) {
+  if (status === "Closed") return "sent";
+  if (status === "Blocked") return "failed";
+  if (status === "In Progress") return "info";
   return "warning";
 }
 

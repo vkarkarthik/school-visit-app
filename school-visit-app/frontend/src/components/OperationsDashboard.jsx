@@ -43,6 +43,7 @@ export default function OperationsDashboard() {
 
   const summary = dashboard?.summary || {};
   const plannerDashboard = dashboard?.plannerDashboard || {};
+  const dailyOperations = dashboard?.dailyOperations || {};
   const filteredRecentReports = (dashboard?.recentReports || []).filter((report) => {
     const search = reportFilters.search.toLowerCase();
     const manager = reportFilters.manager.toLowerCase();
@@ -123,6 +124,94 @@ export default function OperationsDashboard() {
 
           <Panel title="Daily Planner Dashboard">
             <div className="planner-dashboard-shell">
+              <div className="ops-command-board">
+                <div className="ops-command-head">
+                  <div>
+                    <span className="eyebrow">Manager command board</span>
+                    <h3>Today&apos;s PM accountability</h3>
+                  </div>
+                  <span className="panel-badge">
+                    {dailyOperations.date ? new Date(dailyOperations.date).toLocaleDateString('en-IN') : 'Today'}
+                  </span>
+                </div>
+
+                <div className="planner-dashboard-stats">
+                  <Metric label="PMs Planned" value={dailyOperations.totals?.pmPlannedToday} tone="blue" />
+                  <Metric label="No Plan Today" value={dailyOperations.totals?.pmWithoutPlanToday} tone="yellow" />
+                  <Metric label="Day Closed" value={dailyOperations.totals?.dayClosed} tone="green" />
+                  <Metric label="Closure Pending" value={dailyOperations.totals?.closurePending} tone="red" />
+                  <Metric label="Blocked" value={dailyOperations.totals?.blocked} tone="red" />
+                  <Metric label="Field Work" value={dailyOperations.totals?.fieldWork} />
+                  <Metric label="Internal Work" value={dailyOperations.totals?.internalWork} />
+                  <Metric label="Open Next 30D" value={dailyOperations.totals?.nextThirtyDaysOpen || dailyOperations.nextThirtyDaysOpen} tone="blue" />
+                </div>
+
+                <div className="planner-dashboard-grid">
+                  <div className="planner-mini-panel">
+                    <div className="planner-mini-head">
+                      <h3>PM Day Board</h3>
+                      <span>Who planned, closed, or needs attention</span>
+                    </div>
+                    <div className="ops-pm-board">
+                      {(dailyOperations.pmDayBoard || []).map((manager) => (
+                        <article key={manager.key} className={`ops-pm-card ${manager.blocked ? 'risk' : manager.overloaded ? 'warning' : ''}`}>
+                          <div className="ops-pm-card-top">
+                            <div>
+                              <strong>{manager.name}</strong>
+                              <span>{manager.email || 'Email not available'}</span>
+                            </div>
+                            <div className="ops-pm-badges">
+                              {manager.blocked > 0 && <span className="status-pill failed">Blocked</span>}
+                              {manager.closurePending && <span className="status-pill warning">Pending closure</span>}
+                              {manager.overloaded && <span className="status-pill info">High load</span>}
+                            </div>
+                          </div>
+                          <div className="ops-pm-metrics">
+                            <span>Today {manager.todayPlans}</span>
+                            <span>Closed {manager.todayClosed}</span>
+                            <span>Open {manager.openPlans}</span>
+                            <span>Overdue {manager.overdueOpen}</span>
+                            <span>Field {manager.field}</span>
+                            <span>Internal {manager.internal}</span>
+                          </div>
+                        </article>
+                      ))}
+                      {!dailyOperations.pmDayBoard?.length && <div className="empty-state">No PM day data yet.</div>}
+                    </div>
+                  </div>
+
+                  <div className="planner-mini-panel">
+                    <div className="planner-mini-head">
+                      <h3>Escalations</h3>
+                      <span>Blockers and PMs missing a plan today</span>
+                    </div>
+                    <div className="planner-attention-list">
+                      {(dailyOperations.blockedPlans || []).map((plan) => (
+                        <div key={plan._id} className="planner-attention-row">
+                          <div>
+                            <strong>{plan.programManagerName} | {plan.schoolName}</strong>
+                            <span>{plan.blockers || 'Blocked but no blocker note added yet.'}</span>
+                          </div>
+                          <span className="status-pill failed">{plan.dailyStatus || 'Blocked'}</span>
+                        </div>
+                      ))}
+                      {(dailyOperations.managersWithoutPlanToday || []).map((manager) => (
+                        <div key={manager.key} className="planner-attention-row">
+                          <div>
+                            <strong>{manager.name}</strong>
+                            <span>{manager.email || 'Email not available'} | No plan created for today</span>
+                          </div>
+                          <span className="status-pill warning">No plan</span>
+                        </div>
+                      ))}
+                      {!dailyOperations.blockedPlans?.length && !dailyOperations.managersWithoutPlanToday?.length && (
+                        <div className="empty-state">No escalations for today.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="planner-dashboard-stats">
                 <Metric label="Today" value={plannerDashboard.todayPlans?.length || 0} tone="blue" />
                 <Metric label="Next 7 Days" value={plannerDashboard.nextSevenDaysPlans?.length || 0} tone="green" />
@@ -169,6 +258,45 @@ export default function OperationsDashboard() {
                       </div>
                     ))}
                     {!plannerDashboard.byDate?.length && <div className="empty-state">No date-wise plans yet.</div>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="planner-dashboard-grid">
+                <div className="planner-mini-panel">
+                  <div className="planner-mini-head">
+                    <h3>Work Mode Mix</h3>
+                    <span>Field vs internal capacity split</span>
+                  </div>
+                  <div className="planner-status-row">
+                    {(dailyOperations.workModeMix || []).map((item) => (
+                      <div key={item.mode} className="planner-status-pill-card">
+                        <span>{item.mode}</span>
+                        <strong>{item.count}</strong>
+                      </div>
+                    ))}
+                    {!dailyOperations.workModeMix?.length && <div className="empty-state">No work mode split yet.</div>}
+                  </div>
+                </div>
+
+                <div className="planner-mini-panel">
+                  <div className="planner-mini-head">
+                    <h3>Overdue Open Plans</h3>
+                    <span>Plans still not closed after the date passed</span>
+                  </div>
+                  <div className="planner-attention-list">
+                    {(dailyOperations.overdueOpenPlans || []).map((plan) => (
+                      <div key={plan._id} className="planner-attention-row">
+                        <div>
+                          <strong>{plan.schoolName}</strong>
+                          <span>
+                            {plan.programManagerName} | {new Date(plan.plannedDate).toLocaleDateString('en-IN')} | {plan.dailyStatus || 'Planned'}
+                          </span>
+                        </div>
+                        <span className="status-pill warning">{plan.priorityLevel || 'Normal'}</span>
+                      </div>
+                    ))}
+                    {!dailyOperations.overdueOpenPlans?.length && <div className="empty-state">No overdue open plans.</div>}
                   </div>
                 </div>
               </div>

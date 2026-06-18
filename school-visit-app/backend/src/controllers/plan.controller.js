@@ -14,6 +14,14 @@ function normalizeWorkMode(value) {
     : "School Visit";
 }
 
+function normalizePriorityLevel(value) {
+  return ["Critical", "High", "Normal"].includes(value) ? value : "Normal";
+}
+
+function normalizeDailyStatus(value) {
+  return ["Planned", "In Progress", "Closed", "Blocked"].includes(value) ? value : "Planned";
+}
+
 function buildListFilter(query, req) {
   const filter = {};
 
@@ -24,9 +32,14 @@ function buildListFilter(query, req) {
   }
 
   if (query.status) filter.status = query.status;
+  if (query.dailyStatus) filter.dailyStatus = query.dailyStatus;
   if (query.state) filter.state = query.state;
   if (query.schoolName) filter.schoolName = new RegExp(String(query.schoolName).trim(), "i");
   if (query.purposeOfVisit) filter.purposeOfVisit = query.purposeOfVisit;
+  if (query.search) {
+    const pattern = new RegExp(String(query.search).trim(), "i");
+    filter.$or = [{ schoolName: pattern }, { city: pattern }, { pointOfContact: pattern }, { plannedLocation: pattern }];
+  }
 
   if (query.dateFrom || query.dateTo) {
     filter.plannedDate = {};
@@ -61,11 +74,17 @@ export const createPlanController = asyncHandler(async (req, res) => {
     workMode,
     plannedLocation,
     workPlanned,
+    priorityLevel,
+    dailyStatus,
+    blockers,
     plannedDate,
     plannedStartTime,
     plannedEndTime,
     status,
     planningNotes,
+    actualLocation,
+    actualWorkDone,
+    closureNotes,
   } = req.body;
 
   const normalizedManagerEmail = req.isAdmin
@@ -111,6 +130,13 @@ export const createPlanController = asyncHandler(async (req, res) => {
     workMode: normalizedWorkMode,
     plannedLocation,
     workPlanned,
+    priorityLevel: normalizePriorityLevel(priorityLevel),
+    dailyStatus: normalizeDailyStatus(dailyStatus),
+    blockers,
+    actualLocation,
+    actualWorkDone,
+    closureNotes,
+    closureUpdatedAt: closureNotes || actualWorkDone || blockers ? new Date() : undefined,
     plannedDate,
     plannedStartTime,
     plannedEndTime,
@@ -165,9 +191,112 @@ export const listPlansController = asyncHandler(async (req, res) => {
       confirmedPlans: plans.filter((plan) => plan.status === "Confirmed").length,
       completedPlans: plans.filter((plan) => plan.status === "Completed").length,
       cancelledPlans: plans.filter((plan) => plan.status === "Cancelled").length,
+      plannedDayCount: plans.filter((plan) => plan.dailyStatus === "Planned").length,
+      inProgressCount: plans.filter((plan) => plan.dailyStatus === "In Progress").length,
+      closedDayCount: plans.filter((plan) => plan.dailyStatus === "Closed").length,
+      blockedCount: plans.filter((plan) => plan.dailyStatus === "Blocked").length,
+      fieldCount: plans.filter((plan) => plan.workMode === "School Visit").length,
+      internalCount: plans.filter((plan) => plan.workMode !== "School Visit").length,
       convertedPlans: plans.filter((plan) => plan.convertedReportId).length,
       remindersDue: plans.filter((plan) => plan.status === "Confirmed").length,
     },
+  });
+});
+
+export const updatePlanController = asyncHandler(async (req, res) => {
+  const filter = req.isAdmin ? { _id: req.params.id } : { _id: req.params.id, programManagerEmail: req.userEmail };
+  const plan = await VisitPlan.findOne(filter);
+
+  if (!plan) {
+    throw new AppError("Plan not found.", 404);
+  }
+
+  if (!req.isAdmin && plan.status === "Completed") {
+    throw new AppError("Completed plans are locked for PMs. Please contact admin for changes.", 400);
+  }
+
+  const allowed = [
+    "state",
+    "schoolName",
+    "city",
+    "pointOfContact",
+    "contactNo",
+    "schoolEmail",
+    "course",
+    "purposeOfVisit",
+    "workMode",
+    "plannedLocation",
+    "workPlanned",
+    "priorityLevel",
+    "dailyStatus",
+    "blockers",
+    "actualLocation",
+    "actualWorkDone",
+    "closureNotes",
+    "plannedDate",
+    "plannedStartTime",
+    "plannedEndTime",
+    "planningNotes",
+  ];
+
+  for (const key of allowed) {
+    if (!Object.prototype.hasOwnProperty.call(req.body, key)) continue;
+
+    if (key === "workMode") {
+      plan.workMode = normalizeWorkMode(req.body.workMode);
+      continue;
+    }
+
+    if (key === "priorityLevel") {
+      plan.priorityLevel = normalizePriorityLevel(req.body.priorityLevel);
+      continue;
+    }
+
+    if (key === "dailyStatus") {
+      plan.dailyStatus = normalizeDailyStatus(req.body.dailyStatus);
+      continue;
+    }
+
+    plan[key] = req.body[key] || "";
+  }
+
+  const isSchoolVisit = plan.workMode === "School Visit";
+  if (!isSchoolVisit && !String(plan.schoolName || "").trim()) {
+    plan.schoolName = String(plan.purposeOfVisit || "Internal Work").trim();
+  }
+  if (!isSchoolVisit && !String(plan.state || "").trim()) {
+    plan.state = "Internal";
+  }
+
+  if (["Closed", "Blocked", "In Progress"].includes(plan.dailyStatus)) {
+    plan.closureUpdatedAt = new Date();
+  }
+
+  if (plan.dailyStatus === "Closed" && !String(plan.actualWorkDone || "").trim()) {
+    throw new AppError("Actual work done is required before closing the day.", 400);
+  }
+
+  try {
+    await syncPlanToSheets(plan, "Plan Updated");
+    plan.plannerSheetStatus = "Saved";
+    plan.plannerSheetError = "";
+  } catch (error) {
+    plan.plannerSheetStatus = "Failed";
+    plan.plannerSheetError = error.message || "Failed to save planner log";
+  }
+
+  await plan.save();
+
+  res.json({
+    success: true,
+    message:
+      [
+        "Plan updated successfully.",
+        plan.plannerSheetStatus === "Saved" ? "Planner log updated in Google Sheet." : "Planner log could not be saved.",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    plan,
   });
 });
 
@@ -191,6 +320,10 @@ export const updatePlanStatusController = asyncHandler(async (req, res) => {
   }
 
   plan.status = status;
+  if (status === "Completed") {
+    plan.dailyStatus = "Closed";
+    plan.closureUpdatedAt = new Date();
+  }
   plan.calendarSyncStatus = "Not Synced";
   plan.calendarEventId = "";
   plan.calendarSyncError = "";
