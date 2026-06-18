@@ -41,6 +41,11 @@ function buildListFilter(query, req) {
   return filter;
 }
 
+async function syncPlanToSheets(plan, action) {
+  await appendPlanLogToSheet(plan, action);
+  await buildPlannerDashboardSheet();
+}
+
 export const createPlanController = asyncHandler(async (req, res) => {
   const {
     state,
@@ -117,7 +122,7 @@ export const createPlanController = asyncHandler(async (req, res) => {
   });
 
   try {
-    await appendPlanLogToSheet(plan, "Created");
+    await syncPlanToSheets(plan, "Created");
     plan.plannerSheetStatus = "Saved";
     plan.plannerSheetError = "";
   } catch (error) {
@@ -193,7 +198,7 @@ export const updatePlanStatusController = asyncHandler(async (req, res) => {
   plan.notificationError = "";
 
   try {
-    await appendPlanLogToSheet(plan, "Status Updated");
+    await syncPlanToSheets(plan, "Status Updated");
     plan.plannerSheetStatus = "Saved";
     plan.plannerSheetError = "";
   } catch (error) {

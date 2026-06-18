@@ -9,7 +9,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
 import { generatePdfBuffer } from "../services/pdf.service.js";
 import { sendFollowUpReminderEmail, sendVisitReportEmail } from "../services/email.service.js";
-import { appendNewSchoolToSheet } from "../services/sheets.service.js";
+import { appendNewSchoolToSheet, appendPlanLogToSheet, buildPlannerDashboardSheet } from "../services/sheets.service.js";
 import { VisitReport } from "../models/VisitReport.js";
 import { VisitPlan } from "../models/VisitPlan.js";
 import { buildReportHtml } from "../utils/htmlReportTemplate.js";
@@ -31,6 +31,11 @@ function normalizeWorkMode(value) {
   return ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"].includes(value)
     ? value
     : "School Visit";
+}
+
+async function syncPlanToSheets(plan, action) {
+  await appendPlanLogToSheet(plan, action);
+  await buildPlannerDashboardSheet();
 }
 
 function normalizeActionItemsDetailed(value, fallbackActionItems = "", fallbackOwner = "", fallbackDueDate = "") {
@@ -292,7 +297,7 @@ export const createReportController = asyncHandler(async (req, res) => {
     console.log("STEP 7 DONE: Report saved");
 
     if (sourcePlanId) {
-      await VisitPlan.findByIdAndUpdate(sourcePlanId, {
+      const updatedPlan = await VisitPlan.findByIdAndUpdate(sourcePlanId, {
         status: "Completed",
         workMode: ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"].includes(workMode)
           ? workMode
@@ -301,7 +306,20 @@ export const createReportController = asyncHandler(async (req, res) => {
         actualWorkDone,
         convertedReportId: report._id,
         convertedAt: new Date(),
-      });
+      }, { new: true });
+
+      if (updatedPlan) {
+        try {
+          await syncPlanToSheets(updatedPlan, "Status Updated");
+          updatedPlan.plannerSheetStatus = "Saved";
+          updatedPlan.plannerSheetError = "";
+          await updatedPlan.save();
+        } catch (sheetError) {
+          updatedPlan.plannerSheetStatus = "Failed";
+          updatedPlan.plannerSheetError = sheetError.message || "Failed to update planner sheets";
+          await updatedPlan.save();
+        }
+      }
     }
 
     if (isSchoolVisitWork && isNewSchoolVisit) {
