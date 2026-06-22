@@ -9,6 +9,7 @@ import SchedulerPanel from '../components/SchedulerPanel';
 import SchoolVisitForm from '../components/SchoolVisitForm';
 import TrackingDashboard from '../components/TrackingDashboard';
 
+const SCHOOL_MASTER_CACHE_KEY = 'schoolVisitSchoolMasterCache';
 const ADMIN_EMAILS = new Set([
   'karthik@superteacher.in',
   'karthikv@superteacher.in',
@@ -40,9 +41,30 @@ function normalizeUser(user) {
   };
 }
 
+function readCachedSchoolMaster() {
+  try {
+    const saved = localStorage.getItem(SCHOOL_MASTER_CACHE_KEY);
+    if (!saved) return null;
+
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed?.states) || !Array.isArray(parsed?.schools)) {
+      return null;
+    }
+
+    return {
+      states: parsed.states,
+      schools: parsed.schools
+    };
+  } catch {
+    localStorage.removeItem(SCHOOL_MASTER_CACHE_KEY);
+    return null;
+  }
+}
+
 export default function HomePage() {
-  const [schoolMaster, setSchoolMaster] = useState({ states: [], schools: [] });
+  const [schoolMaster, setSchoolMaster] = useState(() => readCachedSchoolMaster() || { states: [], schools: [] });
   const [loading, setLoading] = useState(true);
+  const [schoolMasterStatus, setSchoolMasterStatus] = useState(() => (readCachedSchoolMaster() ? 'cached' : 'loading'));
   const [schoolMasterError, setSchoolMasterError] = useState('');
   const [activeView, setActiveView] = useState('home');
   const [draftToLoad, setDraftToLoad] = useState(null);
@@ -80,26 +102,37 @@ export default function HomePage() {
 
   useEffect(() => {
     async function loadSchoolMaster() {
+      setLoading(true);
       try {
         setSchoolMasterError('');
+        setSchoolMasterStatus((prev) => (schoolMaster.schools.length ? prev : 'loading'));
         const response = await api.get('/schools/master');
-        setSchoolMaster({
+        const nextMaster = {
           states: Array.isArray(response.data.states) ? response.data.states : [],
           schools: Array.isArray(response.data.schools) ? response.data.schools : []
-        });
+        };
+        setSchoolMaster(nextMaster);
+        localStorage.setItem(SCHOOL_MASTER_CACHE_KEY, JSON.stringify(nextMaster));
+        setSchoolMasterStatus('live');
       } catch (error) {
-        setSchoolMaster({ states: [], schools: [] });
-        setSchoolMasterError(
-          error.response?.data?.message || 'Unable to load school data. Please check the backend connection.'
-        );
+        const cachedSchoolMaster = readCachedSchoolMaster();
+        if (cachedSchoolMaster?.schools?.length) {
+          setSchoolMaster(cachedSchoolMaster);
+          setSchoolMasterStatus('cached');
+          setSchoolMasterError('Live school data is taking longer than usual. Showing last available master data for now.');
+        } else {
+          setSchoolMaster({ states: [], schools: [] });
+          setSchoolMasterStatus('issue');
+          setSchoolMasterError(
+            error.response?.data?.message || 'Unable to load school data. Please check the backend connection.'
+          );
+        }
       } finally {
         setLoading(false);
       }
     }
     loadSchoolMaster();
   }, []);
-
-  if (loading) return <div className="page-shell">Loading school data...</div>;
 
   return (
     <div className="app-shell">
@@ -110,7 +143,7 @@ export default function HomePage() {
           <strong>School Visit Reporting</strong>
         </div>
         <div className="topbar-meta">
-          <span>{schoolMaster.schools.length} schools loaded</span>
+          <span>{loading && !schoolMaster.schools.length ? 'Syncing school data...' : `${schoolMaster.schools.length} schools loaded`}</span>
           <span>{schoolMaster.states.length} regions</span>
           <span>{displayRole}</span>
         </div>
@@ -125,7 +158,15 @@ export default function HomePage() {
           <div className="header-actions">
             <div className="header-stat">
               <span>Master data</span>
-              <strong>{schoolMasterError ? 'Issue' : 'Live'}</strong>
+              <strong>
+                {schoolMasterStatus === 'loading'
+                  ? 'Syncing'
+                  : schoolMasterStatus === 'cached'
+                    ? 'Cached'
+                    : schoolMasterStatus === 'issue'
+                      ? 'Issue'
+                      : 'Live'}
+              </strong>
             </div>
             <div className="header-stat">
               <span>Reports</span>
@@ -187,6 +228,12 @@ export default function HomePage() {
                 ? 'Sign in with Google using your SuperTeacher account to unlock reporting.'
                 : 'Enter your SuperTeacher name and @superteacher.in email to unlock reporting until Google Client ID is configured.'}
             </span>
+          </div>
+        )}
+
+        {loading && (
+          <div className="status-text">
+            Opening workspace. School master is syncing in the background...
           </div>
         )}
 

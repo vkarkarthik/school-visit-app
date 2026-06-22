@@ -54,6 +54,13 @@ const LEGACY_PLANNER_DASHBOARD_SHEET = "Dashboard";
 const PLANNER_DASHBOARD_SHEET = "Planner Ops Dashboard";
 const MANAGEMENT_DASHBOARD_SHEET = "Management Dashboard";
 const PLANNER_DASHBOARD_HELPER_SHEET = "_Planner_Dashboard_Data";
+const SCHOOL_MASTER_CACHE_TTL_MS = 10 * 60 * 1000;
+
+let schoolMasterCache = {
+  data: null,
+  fetchedAt: 0,
+  pending: null,
+};
 
 function normalizeHeader(header) {
   return String(header || "").trim().toLowerCase();
@@ -259,11 +266,47 @@ export async function fetchSchoolsFromSheet() {
   return unique;
 }
 
-export async function getSchoolMaster() {
-  const schools = await fetchSchoolsFromSheet();
-  const states = [...new Set(schools.map((s) => s.state).filter(Boolean))].sort();
+export async function getSchoolMaster({ forceRefresh = false } = {}) {
+  const cacheAge = Date.now() - schoolMasterCache.fetchedAt;
+  const hasFreshCache =
+    !forceRefresh &&
+    schoolMasterCache.data &&
+    cacheAge < SCHOOL_MASTER_CACHE_TTL_MS;
 
-  return { states, schools };
+  if (hasFreshCache) {
+    return schoolMasterCache.data;
+  }
+
+  if (!forceRefresh && schoolMasterCache.pending) {
+    return schoolMasterCache.pending;
+  }
+
+  schoolMasterCache.pending = (async () => {
+    const schools = await fetchSchoolsFromSheet();
+    const states = [...new Set(schools.map((s) => s.state).filter(Boolean))].sort();
+    const data = { states, schools };
+
+    schoolMasterCache = {
+      data,
+      fetchedAt: Date.now(),
+      pending: null,
+    };
+
+    return data;
+  })();
+
+  try {
+    return await schoolMasterCache.pending;
+  } catch (error) {
+    schoolMasterCache.pending = null;
+
+    if (schoolMasterCache.data) {
+      console.warn(`School master refresh failed, using cached data: ${error.message}`);
+      return schoolMasterCache.data;
+    }
+
+    throw error;
+  }
 }
 
 async function ensureNewSchoolsSheet() {
