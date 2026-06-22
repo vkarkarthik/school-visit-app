@@ -617,6 +617,74 @@ async function upsertPlannerSnapshotRow(spreadsheetId, sheetName, planId, row) {
   });
 }
 
+async function applyPlannerSheetFormatting(spreadsheetId, sheetName) {
+  const sheetProps = await ensureSheetInSpreadsheet(spreadsheetId, sheetName, false);
+
+  await sheetsClient.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId: sheetProps.sheetId,
+              gridProperties: {
+                frozenRowCount: 1,
+              },
+            },
+            fields: "gridProperties.frozenRowCount",
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetProps.sheetId,
+              startRowIndex: 0,
+              endRowIndex: 1,
+              startColumnIndex: 0,
+              endColumnIndex: 27,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.9, green: 0.95, blue: 1 },
+                textFormat: {
+                  bold: true,
+                  foregroundColor: { red: 0.09, green: 0.22, blue: 0.14 },
+                },
+                horizontalAlignment: "CENTER",
+                verticalAlignment: "MIDDLE",
+                wrapStrategy: "WRAP",
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)",
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId: sheetProps.sheetId,
+              startRowIndex: 1,
+              startColumnIndex: 11,
+              endColumnIndex: 12,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 1, green: 0.96, blue: 0.82 },
+                textFormat: {
+                  bold: true,
+                  foregroundColor: { red: 0.45, green: 0.29, blue: 0.04 },
+                },
+                horizontalAlignment: "CENTER",
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+          },
+        },
+      ],
+    },
+  });
+}
+
 function buildPlannerRow(plan, action = "Created") {
   return [
     new Date().toLocaleString("en-IN"),
@@ -692,6 +760,8 @@ async function rewritePmSnapshotSheets(spreadsheetId, plans = []) {
         },
       });
     }
+
+    await applyPlannerSheetFormatting(spreadsheetId, sheetName);
   }
 }
 
@@ -741,6 +811,35 @@ export async function buildPlannerDashboardSheet() {
   const pmSheets = [...new Set(currentPlans.map((plan) => buildPlannerSheetTabName(plan)))];
 
   await rewritePmSnapshotSheets(spreadsheetId, currentPlans);
+  await ensureSheetWithHeadersInSpreadsheet(
+    spreadsheetId,
+    env.plannerLogSheetName,
+    PLANNER_LOG_HEADERS,
+    `'${env.plannerLogSheetName}'!A1:AA1`
+  );
+  await sheetsClient.spreadsheets.values.clear({
+    spreadsheetId,
+    range: `'${env.plannerLogSheetName}'!A:AA`,
+  });
+  await sheetsClient.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${env.plannerLogSheetName}'!A1:AA1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [PLANNER_LOG_HEADERS],
+    },
+  });
+  if (currentPlans.length) {
+    await sheetsClient.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${env.plannerLogSheetName}'!A2:AA${currentPlans.length + 1}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: currentPlans.map((plan) => buildPlannerRow(plan, "Current Snapshot")),
+      },
+    });
+  }
+  await applyPlannerSheetFormatting(spreadsheetId, env.plannerLogSheetName);
 
   const helperProps = await recreateSheetInSpreadsheet(spreadsheetId, PLANNER_DASHBOARD_HELPER_SHEET, true);
   const dashboardProps = await ensureSheetInSpreadsheet(spreadsheetId, PLANNER_DASHBOARD_SHEET, false);
@@ -1404,14 +1503,7 @@ export async function appendPlanLogToSheet(plan, action = "Created") {
   const row = buildPlannerRow(plan, action);
 
   await upsertPlannerSnapshotRow(plannerSpreadsheetId, plannerTabName, String(plan._id || ""), row);
-
-  await sheetsClient.spreadsheets.values.append({
-    spreadsheetId: plannerSpreadsheetId,
-    range: `'${env.plannerLogSheetName}'!A:AA`,
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: {
-      values: [row],
-    },
-  });
+  await upsertPlannerSnapshotRow(plannerSpreadsheetId, env.plannerLogSheetName, String(plan._id || ""), row);
+  await applyPlannerSheetFormatting(plannerSpreadsheetId, plannerTabName);
+  await applyPlannerSheetFormatting(plannerSpreadsheetId, env.plannerLogSheetName);
 }
