@@ -585,13 +585,19 @@ function buildChartRequest({ sheetId, title, chartType = "COLUMN", domainStartRo
 }
 
 async function upsertPlannerSnapshotRow(spreadsheetId, sheetName, planId, row) {
+  const sheetProps = await ensureSheetInSpreadsheet(spreadsheetId, sheetName, false);
   const response = await sheetsClient.spreadsheets.values.get({
     spreadsheetId,
     range: `'${sheetName}'!A:AA`,
   });
 
   const rows = response.data.values || [];
-  const existingIndex = rows.slice(1).findIndex((currentRow) => String(currentRow[2] || "") === String(planId || ""));
+  const matchingIndexes = rows
+    .slice(1)
+    .map((currentRow, index) => ({ currentRow, index }))
+    .filter(({ currentRow }) => String(currentRow[2] || "") === String(planId || ""))
+    .map(({ index }) => index);
+  const existingIndex = matchingIndexes[0] ?? -1;
 
   if (existingIndex === -1) {
     await sheetsClient.spreadsheets.values.append({
@@ -615,6 +621,33 @@ async function upsertPlannerSnapshotRow(spreadsheetId, sheetName, planId, row) {
       values: [row],
     },
   });
+
+  const duplicateRowNumbers = matchingIndexes.slice(1).map((index) => index + 2);
+  if (duplicateRowNumbers.length) {
+    await sheetsClient.spreadsheets.values.batchClear({
+      spreadsheetId,
+      requestBody: {
+        ranges: duplicateRowNumbers.map((currentRowNumber) => `'${sheetName}'!A${currentRowNumber}:AA${currentRowNumber}`),
+      },
+    });
+    await sheetsClient.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: duplicateRowNumbers
+          .sort((left, right) => right - left)
+          .map((currentRowNumber) => ({
+            deleteDimension: {
+              range: {
+                sheetId: sheetProps.sheetId,
+                dimension: "ROWS",
+                startIndex: currentRowNumber - 1,
+                endIndex: currentRowNumber,
+              },
+            },
+          })),
+      },
+    });
+  }
 }
 
 async function applyPlannerSheetFormatting(spreadsheetId, sheetName) {
@@ -664,6 +697,7 @@ async function applyPlannerSheetFormatting(spreadsheetId, sheetName) {
             range: {
               sheetId: sheetProps.sheetId,
               startRowIndex: 1,
+              endRowIndex: 2000,
               startColumnIndex: 11,
               endColumnIndex: 12,
             },
@@ -678,6 +712,20 @@ async function applyPlannerSheetFormatting(spreadsheetId, sheetName) {
               },
             },
             fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+          },
+        },
+        {
+          updateDimensionProperties: {
+            range: {
+              sheetId: sheetProps.sheetId,
+              dimension: "COLUMNS",
+              startIndex: 11,
+              endIndex: 12,
+            },
+            properties: {
+              pixelSize: 120,
+            },
+            fields: "pixelSize",
           },
         },
       ],
@@ -1500,7 +1548,7 @@ export async function appendPlanLogToSheet(plan, action = "Created") {
     `'${plannerTabName}'!A1:AA1`
   );
 
-  const row = buildPlannerRow(plan, action);
+  const row = buildPlannerRow(plan, "Current Snapshot");
 
   await upsertPlannerSnapshotRow(plannerSpreadsheetId, plannerTabName, String(plan._id || ""), row);
   await upsertPlannerSnapshotRow(plannerSpreadsheetId, env.plannerLogSheetName, String(plan._id || ""), row);

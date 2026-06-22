@@ -276,6 +276,8 @@ export const updatePlanController = asyncHandler(async (req, res) => {
     throw new AppError("Actual work done is required before closing the day.", 400);
   }
 
+  await plan.save();
+
   try {
     await syncPlanToSheets(plan, "Plan Updated");
     plan.plannerSheetStatus = "Saved";
@@ -329,6 +331,8 @@ export const updatePlanStatusController = asyncHandler(async (req, res) => {
   plan.calendarSyncError = "";
   plan.notificationStatus = "Not Required";
   plan.notificationError = "";
+
+  await plan.save();
 
   try {
     await syncPlanToSheets(plan, "Status Updated");
