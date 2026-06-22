@@ -10,11 +10,14 @@ import SchoolVisitForm from '../components/SchoolVisitForm';
 import TrackingDashboard from '../components/TrackingDashboard';
 
 const SCHOOL_MASTER_CACHE_KEY = 'schoolVisitSchoolMasterCache';
+const ALLOWED_EMAIL_DOMAINS = ['@superteacher.in', '@superteacher.co.in'];
 const ADMIN_EMAILS = new Set([
   'karthik@superteacher.in',
   'karthikv@superteacher.in',
   'vasudevan@superteacher.in',
-  'bhanu@superteacher.in'
+  'bhanu@superteacher.in',
+  'manmohan@superteacher.in',
+  'jayasri@superteacher.co.in'
 ]);
 
 const emptyUser = {
@@ -61,6 +64,11 @@ function readCachedSchoolMaster() {
   }
 }
 
+function isAllowedSuperTeacherEmail(email) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  return ALLOWED_EMAIL_DOMAINS.some((domain) => normalizedEmail.endsWith(domain));
+}
+
 export default function HomePage() {
   const [schoolMaster, setSchoolMaster] = useState(() => readCachedSchoolMaster() || { states: [], schools: [] });
   const [loading, setLoading] = useState(true);
@@ -86,7 +94,7 @@ export default function HomePage() {
 
   const isLoggedIn =
     String(currentUser.name || '').trim() &&
-    /^[^\s@]+@superteacher\.in$/i.test(String(currentUser.email || '').trim());
+    isAllowedSuperTeacherEmail(currentUser.email);
   const isAdmin = ADMIN_EMAILS.has(String(currentUser.email || '').trim().toLowerCase());
   const displayRole = isAdmin ? 'Admin / Team Lead' : currentUser.role || 'Program Manager';
 
@@ -208,8 +216,8 @@ export default function HomePage() {
                   onChange={(e) => setCurrentUser({ ...currentUser, email: e.target.value, authProvider: 'manual' })}
                   placeholder="name@superteacher.in"
                 />
-                {currentUser.email && !/^[^\s@]+@superteacher\.in$/i.test(currentUser.email) && (
-                  <span className="field-error">Use your @superteacher.in email.</span>
+                {currentUser.email && !isAllowedSuperTeacherEmail(currentUser.email) && (
+                  <span className="field-error">Use your SuperTeacher work email.</span>
                 )}
               </label>
               <label>
@@ -226,7 +234,7 @@ export default function HomePage() {
             <span>
               {isGoogleConfigured()
                 ? 'Sign in with Google using your SuperTeacher account to unlock reporting.'
-                : 'Enter your SuperTeacher name and @superteacher.in email to unlock reporting until Google Client ID is configured.'}
+                : 'Enter your SuperTeacher name and work email to unlock reporting until Google Client ID is configured.'}
             </span>
           </div>
         )}

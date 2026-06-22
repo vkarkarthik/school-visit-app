@@ -2,13 +2,21 @@ import { OAuth2Client } from "google-auth-library";
 import { env } from "../config/env.js";
 
 const googleAuthClient = env.googleOAuthClientId ? new OAuth2Client(env.googleOAuthClientId) : null;
+const ALLOWED_EMAIL_DOMAINS = ["@superteacher.in", "@superteacher.co.in"];
 
 export const ADMIN_EMAILS = new Set([
   "karthik@superteacher.in",
   "karthikv@superteacher.in",
   "vasudevan@superteacher.in",
   "bhanu@superteacher.in",
+  "manmohan@superteacher.in",
+  "jayasri@superteacher.co.in",
 ]);
+
+function isAllowedSuperTeacherEmail(email) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  return ALLOWED_EMAIL_DOMAINS.some((domain) => normalizedEmail.endsWith(domain));
+}
 
 export async function getVerifiedUserEmail(req) {
   const credential = String(req.headers["x-google-credential"] || "");
@@ -24,7 +32,11 @@ export async function getVerifiedUserEmail(req) {
       const email = String(payload?.email || "").trim().toLowerCase();
       const hostedDomain = String(payload?.hd || "").trim().toLowerCase();
 
-      if (payload?.email_verified && email.endsWith("@superteacher.in") && hostedDomain === "superteacher.in") {
+      if (
+        payload?.email_verified &&
+        isAllowedSuperTeacherEmail(email) &&
+        ["superteacher.in", "superteacher.co.in"].includes(hostedDomain)
+      ) {
         return email;
       }
     } catch (error) {
@@ -32,7 +44,7 @@ export async function getVerifiedUserEmail(req) {
     }
   }
 
-  if (headerEmail.endsWith("@superteacher.in")) {
+  if (isAllowedSuperTeacherEmail(headerEmail)) {
     return headerEmail;
   }
 
@@ -42,7 +54,7 @@ export async function getVerifiedUserEmail(req) {
 export async function requireUser(req, res, next) {
   try {
     const email = await getVerifiedUserEmail(req);
-    if (!email.endsWith("@superteacher.in")) {
+    if (!isAllowedSuperTeacherEmail(email)) {
       return res.status(401).json({
         success: false,
         message: "SuperTeacher login required.",

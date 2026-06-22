@@ -16,7 +16,7 @@ const defaultSchoolMasterRanges = [
   "'Tamil Nadu'!A:Z",
   "'Kerala'!A:Z",
 ];
-const defaultMailCc = "vasudevan@superteacher.in,bhanu@superteacher.in";
+const defaultMailCc = "vasudevan@superteacher.in,bhanu@superteacher.in,manmohan@superteacher.in,jayasri@superteacher.co.in";
 
 export const env = {
   port: Number(process.env.PORT || 5000),

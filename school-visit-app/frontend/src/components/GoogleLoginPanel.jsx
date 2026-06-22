@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const ALLOWED_EMAIL_DOMAINS = ['@superteacher.in', '@superteacher.co.in'];
+
+function isAllowedSuperTeacherEmail(email) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  return ALLOWED_EMAIL_DOMAINS.some((domain) => normalizedEmail.endsWith(domain));
+}
 
 export default function GoogleLoginPanel({ currentUser, onLogin, onLogout }) {
   const buttonRef = useRef(null);
@@ -34,7 +40,7 @@ export default function GoogleLoginPanel({ currentUser, onLogin, onLogout }) {
             const profile = decodeJwt(response.credential);
             const email = String(profile.email || '').toLowerCase();
 
-            if (!email.endsWith('@superteacher.in')) {
+            if (!isAllowedSuperTeacherEmail(email)) {
               setMessage('Please sign in using your SuperTeacher Google account.');
               return;
             }

@@ -20,6 +20,8 @@ const ADMIN_EMAILS = new Set([
   "karthikv@superteacher.in",
   "vasudevan@superteacher.in",
   "bhanu@superteacher.in",
+  "manmohan@superteacher.in",
+  "jayasri@superteacher.co.in",
 ]);
 
 const memoryStorage = multer.memoryStorage();
