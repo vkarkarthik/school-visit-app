@@ -1951,10 +1951,67 @@ tbody tr:last-child td {
 
 .rank-row-button {
   background: var(--surface-soft);
+  color: #173723;
+  align-items: center;
 }
 
 .report-row {
   align-items: center;
+}
+
+.rank-row strong {
+  color: #173723;
+}
+
+.rank-row span {
+  color: var(--muted);
+}
+
+.rank-row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rank-row-copy strong {
+  display: block;
+  color: #173723;
+  font-size: 15px;
+}
+
+.rank-row-copy span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.rank-row-count {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.rank-row-count strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.rank-row-count span {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rank-row-button:hover {
+  background: linear-gradient(180deg, #ffffff, #f4fbf8);
+}
+
+.rank-row-button:hover .rank-row-copy strong,
+.rank-row-button:hover .rank-row-count strong {
+  color: var(--brand-dark);
 }
 
 .inline-link-button {

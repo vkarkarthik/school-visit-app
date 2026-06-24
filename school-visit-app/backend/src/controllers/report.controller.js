@@ -48,6 +48,29 @@ function isAdminEmail(value) {
   return ADMIN_EMAILS.has(String(value || "").trim().toLowerCase());
 }
 
+function normalizeManagerKey(email, name) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (normalizedEmail) return normalizedEmail;
+
+  return String(name || "Unknown PM")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function mergeManagerIdentity(entry, name, email) {
+  const normalizedName = String(name || "").trim();
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+
+  if (normalizedName && (entry.name === "Unknown PM" || normalizedName.length > entry.name.length)) {
+    entry.name = normalizedName;
+  }
+
+  if (normalizedEmail && !entry.email) {
+    entry.email = normalizedEmail;
+  }
+}
+
 async function syncPlanToSheets(plan, action) {
   await appendPlanLogToSheet(plan, action);
   await buildPlannerDashboardSheet();
@@ -496,12 +519,45 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
   const workModeMap = new Map();
 
   for (const report of reports) {
-    managerMap.set(report.programManagerName, (managerMap.get(report.programManagerName) || 0) + 1);
+    const managerKey = normalizeManagerKey(report.programManagerEmail, report.programManagerName);
+    const managerEmail = String(report.programManagerEmail || "").trim().toLowerCase();
+
+    if (!isAdminEmail(managerEmail)) {
+      if (!managerMap.has(managerKey)) {
+        managerMap.set(managerKey, {
+          key: managerKey,
+          name: String(report.programManagerName || "Unknown PM").trim() || "Unknown PM",
+          email: managerEmail,
+          count: 0,
+          sentReports: 0,
+          failedReports: 0,
+          uniqueSchools: new Set(),
+          pendingActions: 0,
+          upcomingFollowUps: 0,
+          latestVisitDate: null,
+        });
+      }
+
+      const managerEntry = managerMap.get(managerKey);
+      mergeManagerIdentity(managerEntry, report.programManagerName, report.programManagerEmail);
+      managerEntry.count += 1;
+      if (report.emailStatus === "Sent") managerEntry.sentReports += 1;
+      if (report.emailStatus === "Failed") managerEntry.failedReports += 1;
+      managerEntry.uniqueSchools.add(`${report.state || "Unknown"}__${report.schoolName || "Unknown School"}`);
+      managerEntry.pendingActions += (report.actionItemsDetailed || []).filter((item) => item.status !== "Completed").length;
+      if (report.nextVisitDate && new Date(report.nextVisitDate) >= now) {
+        managerEntry.upcomingFollowUps += 1;
+      }
+      if (!managerEntry.latestVisitDate || new Date(report.visitDate) > new Date(managerEntry.latestVisitDate)) {
+        managerEntry.latestVisitDate = report.visitDate;
+      }
+    }
+
     purposeMap.set(report.purposeOfVisit, (purposeMap.get(report.purposeOfVisit) || 0) + 1);
-    const managerKey = report.programManagerEmail || report.programManagerName || "Unknown PM";
-    if (!allManagerMap.has(managerKey)) {
-      allManagerMap.set(managerKey, {
-        key: managerKey,
+    const rosterManagerKey = report.programManagerEmail || report.programManagerName || "Unknown PM";
+    if (!allManagerMap.has(rosterManagerKey)) {
+      allManagerMap.set(rosterManagerKey, {
+        key: rosterManagerKey,
         name: report.programManagerName || "Unknown PM",
         email: report.programManagerEmail || "",
       });
@@ -644,9 +700,23 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
       pendingActionItems: pendingActionItems.length,
       overdueFollowUps: reports.filter((r) => r.nextVisitDate && new Date(r.nextVisitDate) < now).length,
     },
-    byManager: [...managerMap.entries()]
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count),
+    byManager: [...managerMap.values()]
+      .map((entry) => ({
+        key: entry.key,
+        name: entry.name,
+        email: entry.email,
+        count: entry.count,
+        sentReports: entry.sentReports,
+        failedReports: entry.failedReports,
+        uniqueSchools: entry.uniqueSchools.size,
+        pendingActions: entry.pendingActions,
+        upcomingFollowUps: entry.upcomingFollowUps,
+        latestVisitDate: entry.latestVisitDate,
+      }))
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return a.name.localeCompare(b.name);
+      }),
     byPurpose: [...purposeMap.entries()]
       .map(([purpose, count]) => ({ purpose, count }))
       .sort((a, b) => b.count - a.count),

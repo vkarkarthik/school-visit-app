@@ -180,8 +180,16 @@ export default function OperationsDashboard() {
                 onItemClick={(item) => openReportsBoard({ manager: item.name || '' }, `Showing reports for ${item.name || 'the selected manager'}.`)}
                 render={(item) => (
                   <>
-                    <span>{item.name || 'Unknown'}</span>
-                    <strong>{item.count}</strong>
+                    <div className="rank-row-copy">
+                      <strong>{item.name || 'Unknown'}</strong>
+                      <span>
+                        {item.uniqueSchools || 0} schools covered • {item.sentReports || 0} sent • {item.pendingActions || 0} pending
+                      </span>
+                    </div>
+                    <div className="rank-row-count">
+                      <strong>{item.count}</strong>
+                      <span>{item.upcomingFollowUps || 0} follow-ups</span>
+                    </div>
                   </>
                 )}
               />
@@ -194,8 +202,14 @@ export default function OperationsDashboard() {
                 onItemClick={(item) => openReportsBoard({ purpose: item.purpose || '' }, `Showing ${item.purpose || 'selected'} reports.`)}
                 render={(item) => (
                   <>
-                    <span>{item.purpose}</span>
-                    <strong>{item.count}</strong>
+                    <div className="rank-row-copy">
+                      <strong>{item.purpose}</strong>
+                      <span>Click to open matching reports</span>
+                    </div>
+                    <div className="rank-row-count">
+                      <strong>{item.count}</strong>
+                      <span>reports</span>
+                    </div>
                   </>
                 )}
               />
