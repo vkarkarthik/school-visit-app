@@ -7,7 +7,9 @@ const PURPOSES = [
   'Induction Training',
   'Teachers Training',
   'Robotics Training',
-  'Admin Related Work'
+  'Admin Related Work',
+  'Software Installation',
+  'Other Works'
 ];
 
 const PURPOSE_GUIDES = {
@@ -77,6 +79,28 @@ const PURPOSE_GUIDES = {
       ['blocker', 'Blocker / dependency', 'Management approval, document pending, payment timeline'],
       ['owner', 'Owner', 'School admin / program manager / accounts team'],
       ['nextStep', 'Next step', 'Close pending item, share document, follow up by date']
+    ]
+  },
+  'Software Installation': {
+    fields: [
+      ['software', 'Software / system installed', 'Lab software, LMS desktop app, coding platform, robotics software'],
+      ['scope', 'Lab / devices covered', 'Lab 1, 12 systems, staff desktop, smart class setup'],
+      ['status', 'Installation status', 'Completed / partly completed / pending on some systems'],
+      ['issues', 'Issues faced', 'Internet issue, admin password pending, system compatibility issue'],
+      ['validation', 'Validation / testing done', 'Login tested, lesson opened, module checked, printer/network checked'],
+      ['owner', 'Support owner / coordinator', 'School IT admin, lab assistant, program manager'],
+      ['nextStep', 'Next step', 'Complete pending systems, share usage note, schedule follow-up support']
+    ]
+  },
+  'Other Works': {
+    fields: [
+      ['workType', 'Type of work', 'Special assignment, review visit, event support, audit, documentation'],
+      ['objective', 'Objective', 'What was the goal of this work today?'],
+      ['peopleInvolved', 'People involved', 'Principal, coordinator, internal team, school staff'],
+      ['outcome', 'Outcome / progress', 'Completed, partly completed, reviewed, escalated'],
+      ['issues', 'Issues / dependencies', 'Approval pending, coordination issue, system issue, timeline dependency'],
+      ['owner', 'Owner / next owner', 'Program manager, school team, sales head, ops team'],
+      ['nextStep', 'Next step', 'Follow-up action, escalation, documentation, revisit date']
     ]
   }
 };
@@ -1060,6 +1084,20 @@ function generateVisitCopy(purpose, details = {}, form = {}) {
     return {
       sessionSummary: `Administrative coordination was completed/reviewed at ${school}. Work completed or reviewed: ${value('workDone', 'administrative coordination')}. People met: ${value('peopleMet', 'the concerned school team')}. Current status: ${value('status', 'to be followed up')}. Pending item, if any: ${value('pending', 'none recorded')}. Blocker/dependency: ${value('blocker', 'none recorded')}. Owner for closure: ${value('owner', 'program manager/school team as applicable')}.`,
       actionItems: `Next step: ${nextStep}. The owner will work towards closure of the pending item and the program manager will track completion.`
+    };
+  }
+
+  if (purpose === 'Software Installation') {
+    return {
+      sessionSummary: `A software installation/support activity was carried out at ${school}. The system/software covered was ${value('software', 'the required software/setup')}${course}. Scope covered: ${value('scope', 'the planned lab/devices/systems')}. Current installation status: ${value('status', 'to be followed up')}. Issues faced during installation/support: ${value('issues', 'none specifically recorded')}. Validation/testing completed included ${value('validation', 'basic usage and access checks')}. Support owner/coordinator involved: ${value('owner', 'school coordinator / program manager')}.`,
+      actionItems: `Next step: ${nextStep}. Pending systems, access issues, or testing gaps will be closed by the concerned owner with follow-up support from SuperTeacher where needed.`
+    };
+  }
+
+  if (purpose === 'Other Works') {
+    return {
+      sessionSummary: `A special work item was carried out for ${school}. Type of work: ${value('workType', 'special assignment / support activity')}. Objective of the work: ${value('objective', 'the required day objective')}. People involved: ${value('peopleInvolved', 'the relevant stakeholders')}. Outcome/progress recorded: ${value('outcome', 'work completed or reviewed')}. Issues or dependencies noted: ${value('issues', 'none specifically recorded')}. Current/next owner: ${value('owner', 'program manager / concerned stakeholder')}.`,
+      actionItems: `Next step: ${nextStep}. The next owner will take closure actions, and the program manager will continue the required follow-up or documentation.`
     };
   }
 

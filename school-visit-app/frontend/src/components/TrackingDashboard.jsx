@@ -433,6 +433,8 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
             <option>Teachers Training</option>
             <option>Robotics Training</option>
             <option>Admin Related Work</option>
+            <option>Software Installation</option>
+            <option>Other Works</option>
           </select>
         </label>
 
