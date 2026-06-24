@@ -11,6 +11,8 @@ export const ADMIN_EMAILS = new Set([
   "bhanu@superteacher.in",
   "manmohan@superteacher.in",
   "jayasri@superteacher.co.in",
+  "marichelvam@superteacher.in",
+  "sukumar@superteacher.in",
 ]);
 
 function isAllowedSuperTeacherEmail(email) {

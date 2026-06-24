@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api } from '../api/client';
 
 const defaultSettings = {
-  adminEmails: 'karthik@superteacher.in, karthikv@superteacher.in, vasudevan@superteacher.in, bhanu@superteacher.in, manmohan@superteacher.in, jayasri@superteacher.co.in',
+  adminEmails: 'karthik@superteacher.in, karthikv@superteacher.in, vasudevan@superteacher.in, bhanu@superteacher.in, manmohan@superteacher.in, jayasri@superteacher.co.in, marichelvam@superteacher.in, sukumar@superteacher.in',
   commonCc: 'vasudevan@superteacher.in, bhanu@superteacher.in, manmohan@superteacher.in, jayasri@superteacher.co.in',
   newSchoolsSheet: 'New Schools',
   googleOAuthStatus: 'Ready to connect when Google Client ID is available',
