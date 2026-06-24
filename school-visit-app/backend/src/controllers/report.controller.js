@@ -531,10 +531,24 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
         coveredSchools: new Set(),
         sentReports: 0,
         managerKeys: new Set(),
+        schools: new Map(),
       });
     }
 
-    stateCoverageMap.get(stateName).totalSchools += 1;
+    const stateEntry = stateCoverageMap.get(stateName);
+    stateEntry.totalSchools += 1;
+    const schoolKey = `${stateName}__${String(school.schoolName || "").trim().toLowerCase()}`;
+    if (!stateEntry.schools.has(schoolKey)) {
+      stateEntry.schools.set(schoolKey, {
+        schoolName: String(school.schoolName || "").trim(),
+        city: String(school.city || "").trim(),
+        totalVisits: 0,
+        covered: false,
+        sentReports: 0,
+        lastVisitDate: null,
+        managers: new Set(),
+      });
+    }
   }
 
   for (const report of reports) {
@@ -549,14 +563,38 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
         coveredSchools: new Set(),
         sentReports: 0,
         managerKeys: new Set(),
+        schools: new Map(),
       });
     }
 
     const stateCoverageEntry = stateCoverageMap.get(stateName);
-    stateCoverageEntry.coveredSchools.add(String(report.schoolName || "Unknown School").trim());
+    const normalizedSchoolName = String(report.schoolName || "Unknown School").trim();
+    stateCoverageEntry.coveredSchools.add(normalizedSchoolName);
     if (report.emailStatus === "Sent") stateCoverageEntry.sentReports += 1;
     if (!isAdminEmail(managerEmail)) {
       stateCoverageEntry.managerKeys.add(managerKey);
+    }
+    const schoolKey = `${stateName}__${normalizedSchoolName.toLowerCase()}`;
+    if (!stateCoverageEntry.schools.has(schoolKey)) {
+      stateCoverageEntry.schools.set(schoolKey, {
+        schoolName: normalizedSchoolName,
+        city: String(report.city || "").trim(),
+        totalVisits: 0,
+        covered: false,
+        sentReports: 0,
+        lastVisitDate: null,
+        managers: new Set(),
+      });
+    }
+    const schoolEntry = stateCoverageEntry.schools.get(schoolKey);
+    schoolEntry.totalVisits += 1;
+    schoolEntry.covered = true;
+    if (report.emailStatus === "Sent") schoolEntry.sentReports += 1;
+    if (report.visitDate && (!schoolEntry.lastVisitDate || new Date(report.visitDate) > new Date(schoolEntry.lastVisitDate))) {
+      schoolEntry.lastVisitDate = report.visitDate;
+    }
+    if (!isAdminEmail(managerEmail) && report.programManagerName) {
+      schoolEntry.managers.add(String(report.programManagerName).trim());
     }
 
     if (!isAdminEmail(managerEmail)) {
@@ -771,6 +809,24 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
           coveragePercent,
           sentReports: entry.sentReports,
           activeManagers: entry.managerKeys.size,
+          schools: [...entry.schools.values()]
+            .map((school) => ({
+              schoolName: school.schoolName,
+              city: school.city,
+              totalVisits: school.totalVisits,
+              covered: school.covered,
+              sentReports: school.sentReports,
+              lastVisitDate: school.lastVisitDate,
+              managers: [...school.managers].sort(),
+            }))
+            .sort((a, b) => {
+              if (Number(b.covered) !== Number(a.covered)) return Number(b.covered) - Number(a.covered);
+              if (b.totalVisits !== a.totalVisits) return b.totalVisits - a.totalVisits;
+              if (a.lastVisitDate && b.lastVisitDate && new Date(b.lastVisitDate) - new Date(a.lastVisitDate) !== 0) {
+                return new Date(b.lastVisitDate) - new Date(a.lastVisitDate);
+              }
+              return a.schoolName.localeCompare(b.schoolName);
+            }),
         };
       })
       .sort((a, b) => {

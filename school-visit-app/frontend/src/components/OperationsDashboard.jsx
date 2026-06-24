@@ -751,8 +751,8 @@ function RankList({ items = [], render, emptyText, onItemClick }) {
 }
 
 function StateCoverageSnapshot({ items = [], onItemClick }) {
+  const [selectedState, setSelectedState] = useState(items[0]?.state || '');
   if (!items.length) return <div className="empty-state">No state coverage data yet.</div>;
-
   const totalSchools = items.reduce((sum, item) => sum + (item.totalSchools || 0), 0);
   const coveredSchools = items.reduce((sum, item) => sum + (item.coveredSchools || 0), 0);
   const sentReports = items.reduce((sum, item) => sum + (item.sentReports || 0), 0);
@@ -772,6 +772,22 @@ function StateCoverageSnapshot({ items = [], onItemClick }) {
       return (a.coveragePercent || 0) - (b.coveragePercent || 0);
     })
     .slice(0, 6);
+  const selectedStateData =
+    items.find((item) => item.state === selectedState) ||
+    topCovered[0] ||
+    biggestGaps[0] ||
+    items[0];
+
+  useEffect(() => {
+    if (!selectedStateData?.state) return;
+    if (!items.some((item) => item.state === selectedState)) {
+      setSelectedState(selectedStateData.state);
+    }
+  }, [items, selectedState, selectedStateData]);
+
+  const selectState = (item) => {
+    setSelectedState(item.state);
+  };
 
   return (
     <div className="state-coverage-shell">
@@ -829,8 +845,8 @@ function StateCoverageSnapshot({ items = [], onItemClick }) {
               <button
                 key={item.state}
                 type="button"
-                className="state-coverage-card featured"
-                onClick={() => onItemClick?.(item)}
+                className={`state-coverage-card featured ${selectedState === item.state ? 'active' : ''}`}
+                onClick={() => selectState(item)}
               >
                 <div className="state-coverage-head">
                   <div className="state-coverage-copy">
@@ -863,8 +879,8 @@ function StateCoverageSnapshot({ items = [], onItemClick }) {
               <button
                 key={item.state}
                 type="button"
-                className="state-coverage-card opportunity"
-                onClick={() => onItemClick?.(item)}
+                className={`state-coverage-card opportunity ${selectedState === item.state ? 'active' : ''}`}
+                onClick={() => selectState(item)}
               >
                 <div className="state-coverage-head">
                   <div className="state-coverage-copy">
@@ -885,6 +901,52 @@ function StateCoverageSnapshot({ items = [], onItemClick }) {
           </div>
         </article>
       </div>
+
+      {selectedStateData && (
+        <article className="state-school-panel">
+          <div className="state-school-panel-head">
+            <div>
+              <span className="eyebrow">School Drill-down</span>
+              <h3>{selectedStateData.state}</h3>
+              <p className="muted-text">
+                Covered schools are shown first. Visit count helps you see repeat engagement by school.
+              </p>
+            </div>
+            <div className="state-school-panel-actions">
+              <span className="panel-badge">{selectedStateData.coveredSchools} covered</span>
+              <span className="panel-badge">{selectedStateData.uncoveredSchools} uncovered</span>
+              <button type="button" className="table-action" onClick={() => onItemClick?.(selectedStateData)}>
+                Open reports
+              </button>
+            </div>
+          </div>
+
+          <div className="state-school-list">
+            {(selectedStateData.schools || []).map((school) => (
+              <div key={`${selectedStateData.state}-${school.schoolName}`} className={`state-school-row ${school.covered ? 'covered' : 'uncovered'}`}>
+                <div className="state-school-copy">
+                  <div className="state-school-title">
+                    <strong>{school.schoolName}</strong>
+                    <span className={`status-pill ${school.covered ? 'sent' : 'warning'}`}>
+                      {school.covered ? 'Covered' : 'Not covered'}
+                    </span>
+                  </div>
+                  <span>
+                    {school.city || selectedStateData.state}
+                    {school.lastVisitDate ? ` | Last visit ${new Date(school.lastVisitDate).toLocaleDateString('en-IN')}` : ' | No visit yet'}
+                    {school.managers?.length ? ` | ${school.managers.join(', ')}` : ''}
+                  </span>
+                </div>
+                <div className="state-school-metrics">
+                  <strong>{school.totalVisits || 0}</strong>
+                  <span>visits</span>
+                </div>
+              </div>
+            ))}
+            {!selectedStateData.schools?.length && <div className="empty-state">No school list available for this state.</div>}
+          </div>
+        </article>
+      )}
     </div>
   );
 }

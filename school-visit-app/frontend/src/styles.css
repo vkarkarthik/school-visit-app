@@ -2159,6 +2159,11 @@ tbody tr:last-child td {
   box-shadow: 0 10px 22px rgba(22, 34, 51, 0.08);
 }
 
+.state-coverage-card.active {
+  border-color: #2b7bb1;
+  box-shadow: 0 10px 22px rgba(25, 97, 148, 0.12);
+}
+
 .state-coverage-head,
 .state-coverage-meta {
   display: flex;
@@ -2213,6 +2218,108 @@ tbody tr:last-child td {
   min-width: 6px;
   border-radius: inherit;
   background: linear-gradient(90deg, #2f7f47, #45a762);
+}
+
+.state-school-panel {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff, #f7fbf9);
+  padding: 18px;
+  box-shadow: 0 8px 20px rgba(22, 34, 51, 0.04);
+}
+
+.state-school-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.state-school-panel-head h3 {
+  margin: 6px 0 8px;
+  color: #173723;
+  font-size: 22px;
+}
+
+.state-school-panel-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.state-school-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.state-school-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid #dceae2;
+  border-radius: 14px;
+  padding: 14px;
+  background: #fbfefd;
+}
+
+.state-school-row.covered {
+  background: linear-gradient(180deg, #ffffff, #f6fcf8);
+}
+
+.state-school-row.uncovered {
+  background: linear-gradient(180deg, #fffdf8, #fff9ee);
+}
+
+.state-school-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.state-school-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.state-school-title strong {
+  color: #173723;
+  font-size: 16px;
+}
+
+.state-school-copy span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.state-school-metrics {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.state-school-metrics strong {
+  color: #173723;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.state-school-metrics span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .inline-link-button {
