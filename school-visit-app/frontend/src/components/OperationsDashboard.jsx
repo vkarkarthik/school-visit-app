@@ -216,6 +216,13 @@ export default function OperationsDashboard() {
             </Panel>
           </div>
 
+          <Panel title="State Coverage Snapshot">
+            <StateCoverageSnapshot
+              items={dashboard.byStateCoverage || []}
+              onItemClick={(item) => openReportsBoard({ search: item.state || '' }, `Showing reports linked to ${item.state || 'the selected state'}.`)}
+            />
+          </Panel>
+
           <div className="dashboard-grid">
             <Panel title="Today’s Risk and Escalations">
               <div className="planner-attention-list">
@@ -739,6 +746,145 @@ function RankList({ items = [], render, emptyText, onItemClick }) {
           {render(item)}
         </button>
       ))}
+    </div>
+  );
+}
+
+function StateCoverageSnapshot({ items = [], onItemClick }) {
+  if (!items.length) return <div className="empty-state">No state coverage data yet.</div>;
+
+  const totalSchools = items.reduce((sum, item) => sum + (item.totalSchools || 0), 0);
+  const coveredSchools = items.reduce((sum, item) => sum + (item.coveredSchools || 0), 0);
+  const sentReports = items.reduce((sum, item) => sum + (item.sentReports || 0), 0);
+  const activeStates = items.filter((item) => (item.coveredSchools || 0) > 0).length;
+  const overallCoverage = totalSchools > 0 ? Math.round((coveredSchools / totalSchools) * 100) : 0;
+  const topCovered = [...items]
+    .filter((item) => (item.coveredSchools || 0) > 0)
+    .sort((a, b) => {
+      if ((b.coveredSchools || 0) !== (a.coveredSchools || 0)) return (b.coveredSchools || 0) - (a.coveredSchools || 0);
+      return (b.coveragePercent || 0) - (a.coveragePercent || 0);
+    })
+    .slice(0, 6);
+  const biggestGaps = [...items]
+    .filter((item) => (item.uncoveredSchools || 0) > 0)
+    .sort((a, b) => {
+      if ((b.uncoveredSchools || 0) !== (a.uncoveredSchools || 0)) return (b.uncoveredSchools || 0) - (a.uncoveredSchools || 0);
+      return (a.coveragePercent || 0) - (b.coveragePercent || 0);
+    })
+    .slice(0, 6);
+
+  return (
+    <div className="state-coverage-shell">
+      <div className="state-coverage-summary">
+        <div className="state-coverage-ring-card">
+          <div
+            className="state-coverage-ring"
+            style={{
+              background: `conic-gradient(#2f7f47 0 ${overallCoverage}%, #e7f0eb ${overallCoverage}% 100%)`,
+            }}
+            aria-hidden="true"
+          >
+            <div className="state-coverage-ring-inner">
+              <strong>{overallCoverage}%</strong>
+              <span>coverage</span>
+            </div>
+          </div>
+          <div className="state-coverage-summary-copy">
+            <span className="eyebrow">Overall school reach</span>
+            <h3>{coveredSchools} of {totalSchools} schools covered</h3>
+            <p className="muted-text">This compares report-covered schools against total schools available in the master sheet.</p>
+          </div>
+        </div>
+
+        <div className="state-coverage-stat-grid">
+          <article className="state-coverage-stat-card">
+            <span>Total Schools</span>
+            <strong>{totalSchools}</strong>
+          </article>
+          <article className="state-coverage-stat-card">
+            <span>Covered</span>
+            <strong>{coveredSchools}</strong>
+          </article>
+          <article className="state-coverage-stat-card">
+            <span>States Active</span>
+            <strong>{activeStates}</strong>
+          </article>
+          <article className="state-coverage-stat-card">
+            <span>Reports Sent</span>
+            <strong>{sentReports}</strong>
+          </article>
+        </div>
+      </div>
+
+      <div className="state-coverage-board">
+        <article className="state-coverage-panel">
+          <div className="state-coverage-panel-head">
+            <div>
+              <span className="eyebrow">Top Covered States</span>
+              <h3>Where execution is strongest</h3>
+            </div>
+          </div>
+          <div className="state-coverage-list compact">
+            {topCovered.map((item) => (
+              <button
+                key={item.state}
+                type="button"
+                className="state-coverage-card featured"
+                onClick={() => onItemClick?.(item)}
+              >
+                <div className="state-coverage-head">
+                  <div className="state-coverage-copy">
+                    <strong>{item.state}</strong>
+                    <span>{item.coveredSchools} covered of {item.totalSchools || 0}</span>
+                  </div>
+                  <div className="state-coverage-percentage">
+                    <strong>{item.coveragePercent || 0}%</strong>
+                    <span>{item.sentReports || 0} sent</span>
+                  </div>
+                </div>
+                <div className="state-coverage-bar" aria-hidden="true">
+                  <span style={{ width: `${item.coveragePercent || 0}%` }} />
+                </div>
+              </button>
+            ))}
+            {!topCovered.length && <div className="empty-state">No covered states yet.</div>}
+          </div>
+        </article>
+
+        <article className="state-coverage-panel">
+          <div className="state-coverage-panel-head">
+            <div>
+              <span className="eyebrow">Biggest Opportunities</span>
+              <h3>States still needing coverage</h3>
+            </div>
+          </div>
+          <div className="state-coverage-list compact">
+            {biggestGaps.map((item) => (
+              <button
+                key={item.state}
+                type="button"
+                className="state-coverage-card opportunity"
+                onClick={() => onItemClick?.(item)}
+              >
+                <div className="state-coverage-head">
+                  <div className="state-coverage-copy">
+                    <strong>{item.state}</strong>
+                    <span>{item.uncoveredSchools || 0} still uncovered</span>
+                  </div>
+                  <div className="state-coverage-percentage">
+                    <strong>{item.coveragePercent || 0}%</strong>
+                    <span>{item.activeManagers || 0} PMs active</span>
+                  </div>
+                </div>
+                <div className="state-coverage-bar" aria-hidden="true">
+                  <span style={{ width: `${item.coveragePercent || 0}%` }} />
+                </div>
+              </button>
+            ))}
+            {!biggestGaps.length && <div className="empty-state">No uncovered states right now.</div>}
+          </div>
+        </article>
+      </div>
     </div>
   );
 }

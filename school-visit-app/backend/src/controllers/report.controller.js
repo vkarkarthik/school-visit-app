@@ -9,7 +9,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
 import { generatePdfBuffer } from "../services/pdf.service.js";
 import { sendFollowUpReminderEmail, sendVisitReportEmail } from "../services/email.service.js";
-import { appendNewSchoolToSheet, appendPlanLogToSheet, buildPlannerDashboardSheet } from "../services/sheets.service.js";
+import { appendNewSchoolToSheet, appendPlanLogToSheet, buildPlannerDashboardSheet, getSchoolMaster } from "../services/sheets.service.js";
 import { VisitReport } from "../models/VisitReport.js";
 import { VisitPlan } from "../models/VisitPlan.js";
 import { buildReportHtml } from "../utils/htmlReportTemplate.js";
@@ -497,7 +497,7 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
   const yearStart = new Date(year, 0, 1);
   const yearEnd = new Date(year + 1, 0, 1);
 
-  const [reports, plans] = await Promise.all([
+  const [reports, plans, schoolMaster] = await Promise.all([
     VisitReport.find({
       visitDate: { $gte: yearStart, $lt: yearEnd },
     })
@@ -508,6 +508,7 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
     })
       .sort({ plannedDate: 1, createdAt: -1 })
       .lean(),
+    getSchoolMaster().catch(() => ({ states: [], schools: [] })),
   ]);
 
   const managerMap = new Map();
@@ -517,10 +518,46 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
   const planDateMap = new Map();
   const allManagerMap = new Map();
   const workModeMap = new Map();
+  const stateCoverageMap = new Map();
+
+  for (const school of schoolMaster?.schools || []) {
+    const stateName = String(school.state || "").trim();
+    if (!stateName) continue;
+
+    if (!stateCoverageMap.has(stateName)) {
+      stateCoverageMap.set(stateName, {
+        state: stateName,
+        totalSchools: 0,
+        coveredSchools: new Set(),
+        sentReports: 0,
+        managerKeys: new Set(),
+      });
+    }
+
+    stateCoverageMap.get(stateName).totalSchools += 1;
+  }
 
   for (const report of reports) {
     const managerKey = normalizeManagerKey(report.programManagerEmail, report.programManagerName);
     const managerEmail = String(report.programManagerEmail || "").trim().toLowerCase();
+    const stateName = String(report.state || "").trim() || "Unknown";
+
+    if (!stateCoverageMap.has(stateName)) {
+      stateCoverageMap.set(stateName, {
+        state: stateName,
+        totalSchools: 0,
+        coveredSchools: new Set(),
+        sentReports: 0,
+        managerKeys: new Set(),
+      });
+    }
+
+    const stateCoverageEntry = stateCoverageMap.get(stateName);
+    stateCoverageEntry.coveredSchools.add(String(report.schoolName || "Unknown School").trim());
+    if (report.emailStatus === "Sent") stateCoverageEntry.sentReports += 1;
+    if (!isAdminEmail(managerEmail)) {
+      stateCoverageEntry.managerKeys.add(managerKey);
+    }
 
     if (!isAdminEmail(managerEmail)) {
       if (!managerMap.has(managerKey)) {
@@ -720,6 +757,27 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
     byPurpose: [...purposeMap.entries()]
       .map(([purpose, count]) => ({ purpose, count }))
       .sort((a, b) => b.count - a.count),
+    byStateCoverage: [...stateCoverageMap.values()]
+      .map((entry) => {
+        const coveredSchools = entry.coveredSchools.size;
+        const totalSchools = entry.totalSchools;
+        const coveragePercent = totalSchools > 0 ? Math.round((coveredSchools / totalSchools) * 100) : 0;
+
+        return {
+          state: entry.state,
+          totalSchools,
+          coveredSchools,
+          uncoveredSchools: Math.max(totalSchools - coveredSchools, 0),
+          coveragePercent,
+          sentReports: entry.sentReports,
+          activeManagers: entry.managerKeys.size,
+        };
+      })
+      .sort((a, b) => {
+        if (b.coveredSchools !== a.coveredSchools) return b.coveredSchools - a.coveredSchools;
+        if (b.coveragePercent !== a.coveragePercent) return b.coveragePercent - a.coveragePercent;
+        return a.state.localeCompare(b.state);
+      }),
     recentReports: reports.slice(0, 10),
     failedReports: reports.filter((r) => r.emailStatus === "Failed").slice(0, 10),
     pendingNewSchools: reports.filter((r) => r.newSchoolApprovalStatus === "Pending").slice(0, 10),
