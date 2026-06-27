@@ -1,7 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
 import { VisitPlan } from "../models/VisitPlan.js";
-import { appendPlanLogToSheet, buildPlannerDashboardSheet } from "../services/sheets.service.js";
+import { appendPlanLogToSheet, buildPlannerDashboardSheet, isPlannerSheetQuotaError, schedulePlannerDashboardRefresh } from "../services/sheets.service.js";
 import { sendPlanReminderEmail } from "../services/email.service.js";
 
 function validateEmail(value) {
@@ -56,7 +56,19 @@ function buildListFilter(query, req) {
 
 async function syncPlanToSheets(plan, action) {
   await appendPlanLogToSheet(plan, action);
-  await buildPlannerDashboardSheet();
+  schedulePlannerDashboardRefresh();
+}
+
+function applyPlannerSheetSyncError(plan, error) {
+  if (isPlannerSheetQuotaError(error)) {
+    plan.plannerSheetStatus = "Pending";
+    plan.plannerSheetError = "Saved in app. Google Sheet sync queued because the write quota is temporarily busy.";
+    schedulePlannerDashboardRefresh();
+    return;
+  }
+
+  plan.plannerSheetStatus = "Failed";
+  plan.plannerSheetError = error.message || "Failed to save planner log";
 }
 
 export const createPlanController = asyncHandler(async (req, res) => {
@@ -152,8 +164,7 @@ export const createPlanController = asyncHandler(async (req, res) => {
     plan.plannerSheetStatus = "Saved";
     plan.plannerSheetError = "";
   } catch (error) {
-    plan.plannerSheetStatus = "Failed";
-    plan.plannerSheetError = error.message || "Failed to save planner log";
+    applyPlannerSheetSyncError(plan, error);
   }
 
   await plan.save();
@@ -163,7 +174,11 @@ export const createPlanController = asyncHandler(async (req, res) => {
     message:
       [
         "Plan saved successfully.",
-        plan.plannerSheetStatus === "Saved" ? "Planner log updated in Google Sheet." : "Planner log could not be saved.",
+        plan.plannerSheetStatus === "Saved"
+          ? "Planner log updated in Google Sheet."
+          : plan.plannerSheetStatus === "Pending"
+            ? "Saved in app. Google Sheet sync is queued."
+            : "Planner log could not be saved.",
       ]
         .filter(Boolean)
         .join(" "),
@@ -283,8 +298,7 @@ export const updatePlanController = asyncHandler(async (req, res) => {
     plan.plannerSheetStatus = "Saved";
     plan.plannerSheetError = "";
   } catch (error) {
-    plan.plannerSheetStatus = "Failed";
-    plan.plannerSheetError = error.message || "Failed to save planner log";
+    applyPlannerSheetSyncError(plan, error);
   }
 
   await plan.save();
@@ -294,7 +308,11 @@ export const updatePlanController = asyncHandler(async (req, res) => {
     message:
       [
         "Plan updated successfully.",
-        plan.plannerSheetStatus === "Saved" ? "Planner log updated in Google Sheet." : "Planner log could not be saved.",
+        plan.plannerSheetStatus === "Saved"
+          ? "Planner log updated in Google Sheet."
+          : plan.plannerSheetStatus === "Pending"
+            ? "Saved in app. Google Sheet sync is queued."
+            : "Planner log could not be saved.",
       ]
         .filter(Boolean)
         .join(" "),
@@ -339,8 +357,7 @@ export const updatePlanStatusController = asyncHandler(async (req, res) => {
     plan.plannerSheetStatus = "Saved";
     plan.plannerSheetError = "";
   } catch (error) {
-    plan.plannerSheetStatus = "Failed";
-    plan.plannerSheetError = error.message || "Failed to save planner log";
+    applyPlannerSheetSyncError(plan, error);
   }
 
   await plan.save();
@@ -350,7 +367,11 @@ export const updatePlanStatusController = asyncHandler(async (req, res) => {
     message:
       [
         "Plan status updated successfully.",
-        plan.plannerSheetStatus === "Saved" ? "Planner log updated in Google Sheet." : "Planner log could not be saved.",
+        plan.plannerSheetStatus === "Saved"
+          ? "Planner log updated in Google Sheet."
+          : plan.plannerSheetStatus === "Pending"
+            ? "Saved in app. Google Sheet sync is queued."
+            : "Planner log could not be saved.",
       ]
         .filter(Boolean)
         .join(" "),

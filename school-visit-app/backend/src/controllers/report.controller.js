@@ -9,7 +9,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
 import { generatePdfBuffer } from "../services/pdf.service.js";
 import { sendFollowUpReminderEmail, sendVisitReportEmail } from "../services/email.service.js";
-import { appendNewSchoolToSheet, appendPlanLogToSheet, buildPlannerDashboardSheet, getSchoolMaster } from "../services/sheets.service.js";
+import { appendNewSchoolToSheet, appendPlanLogToSheet, getSchoolMaster, isPlannerSheetQuotaError, schedulePlannerDashboardRefresh } from "../services/sheets.service.js";
 import { VisitReport } from "../models/VisitReport.js";
 import { VisitPlan } from "../models/VisitPlan.js";
 import { buildReportHtml } from "../utils/htmlReportTemplate.js";
@@ -73,7 +73,19 @@ function mergeManagerIdentity(entry, name, email) {
 
 async function syncPlanToSheets(plan, action) {
   await appendPlanLogToSheet(plan, action);
-  await buildPlannerDashboardSheet();
+  schedulePlannerDashboardRefresh();
+}
+
+function applyPlannerSheetSyncError(plan, error) {
+  if (isPlannerSheetQuotaError(error)) {
+    plan.plannerSheetStatus = "Pending";
+    plan.plannerSheetError = "Saved in app. Google Sheet sync queued because the write quota is temporarily busy.";
+    schedulePlannerDashboardRefresh();
+    return;
+  }
+
+  plan.plannerSheetStatus = "Failed";
+  plan.plannerSheetError = error.message || "Failed to update planner sheets";
 }
 
 function normalizeActionItemsDetailed(value, fallbackActionItems = "", fallbackOwner = "", fallbackDueDate = "") {
@@ -353,8 +365,7 @@ export const createReportController = asyncHandler(async (req, res) => {
           updatedPlan.plannerSheetError = "";
           await updatedPlan.save();
         } catch (sheetError) {
-          updatedPlan.plannerSheetStatus = "Failed";
-          updatedPlan.plannerSheetError = sheetError.message || "Failed to update planner sheets";
+          applyPlannerSheetSyncError(updatedPlan, sheetError);
           await updatedPlan.save();
         }
       }

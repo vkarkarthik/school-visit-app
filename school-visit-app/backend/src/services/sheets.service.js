@@ -61,6 +61,10 @@ let schoolMasterCache = {
   fetchedAt: 0,
   pending: null,
 };
+const formattedPlannerSheets = new Set();
+let plannerDashboardRefreshTimer = null;
+let plannerDashboardRefreshRunning = null;
+const PLANNER_DASHBOARD_REFRESH_DELAY_MS = 45000;
 
 function normalizeHeader(header) {
   return String(header || "").trim().toLowerCase();
@@ -733,6 +737,45 @@ async function applyPlannerSheetFormatting(spreadsheetId, sheetName) {
   });
 }
 
+async function ensurePlannerSheetFormatting(spreadsheetId, sheetName) {
+  const cacheKey = `${spreadsheetId}::${sheetName}`;
+  if (formattedPlannerSheets.has(cacheKey)) {
+    return;
+  }
+
+  await applyPlannerSheetFormatting(spreadsheetId, sheetName);
+  formattedPlannerSheets.add(cacheKey);
+}
+
+export function isPlannerSheetQuotaError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("quota exceeded") ||
+    message.includes("write requests per minute") ||
+    message.includes("rate limit") ||
+    message.includes("too many requests")
+  );
+}
+
+export function schedulePlannerDashboardRefresh(delayMs = PLANNER_DASHBOARD_REFRESH_DELAY_MS) {
+  if (plannerDashboardRefreshTimer || plannerDashboardRefreshRunning) {
+    return;
+  }
+
+  plannerDashboardRefreshTimer = setTimeout(async () => {
+    plannerDashboardRefreshTimer = null;
+    plannerDashboardRefreshRunning = buildPlannerDashboardSheet()
+      .catch((error) => {
+        console.warn(`Planner dashboard refresh skipped: ${error.message}`);
+      })
+      .finally(() => {
+        plannerDashboardRefreshRunning = null;
+      });
+
+    await plannerDashboardRefreshRunning;
+  }, delayMs);
+}
+
 function buildPlannerRow(plan, action = "Created") {
   return [
     new Date().toLocaleString("en-IN"),
@@ -810,6 +853,7 @@ async function rewritePmSnapshotSheets(spreadsheetId, plans = []) {
     }
 
     await applyPlannerSheetFormatting(spreadsheetId, sheetName);
+    formattedPlannerSheets.add(`${spreadsheetId}::${sheetName}`);
   }
 }
 
@@ -851,6 +895,10 @@ function buildSlicerRequest({ sheetId, title, dataStartRow = 9, dataEndRow = 100
 }
 
 export async function buildPlannerDashboardSheet() {
+  if (plannerDashboardRefreshTimer) {
+    clearTimeout(plannerDashboardRefreshTimer);
+    plannerDashboardRefreshTimer = null;
+  }
   const spreadsheetId = env.plannerSpreadsheetId;
   await renameSheetIfNeeded(spreadsheetId, LEGACY_PLANNER_DASHBOARD_SHEET, PLANNER_DASHBOARD_SHEET);
   const currentPlans = await VisitPlan.find({})
@@ -888,6 +936,7 @@ export async function buildPlannerDashboardSheet() {
     });
   }
   await applyPlannerSheetFormatting(spreadsheetId, env.plannerLogSheetName);
+  formattedPlannerSheets.add(`${spreadsheetId}::${env.plannerLogSheetName}`);
 
   const helperProps = await recreateSheetInSpreadsheet(spreadsheetId, PLANNER_DASHBOARD_HELPER_SHEET, true);
   const dashboardProps = await ensureSheetInSpreadsheet(spreadsheetId, PLANNER_DASHBOARD_SHEET, false);
@@ -1552,6 +1601,6 @@ export async function appendPlanLogToSheet(plan, action = "Created") {
 
   await upsertPlannerSnapshotRow(plannerSpreadsheetId, plannerTabName, String(plan._id || ""), row);
   await upsertPlannerSnapshotRow(plannerSpreadsheetId, env.plannerLogSheetName, String(plan._id || ""), row);
-  await applyPlannerSheetFormatting(plannerSpreadsheetId, plannerTabName);
-  await applyPlannerSheetFormatting(plannerSpreadsheetId, env.plannerLogSheetName);
+  await ensurePlannerSheetFormatting(plannerSpreadsheetId, plannerTabName);
+  await ensurePlannerSheetFormatting(plannerSpreadsheetId, env.plannerLogSheetName);
 }
