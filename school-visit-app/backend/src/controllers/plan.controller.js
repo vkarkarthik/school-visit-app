@@ -283,6 +283,10 @@ export const updatePlanController = asyncHandler(async (req, res) => {
     plan.state = "Internal";
   }
 
+  if (plan.plannedDate) {
+    plan.year = new Date(plan.plannedDate).getFullYear();
+  }
+
   if (["Closed", "Blocked", "In Progress"].includes(plan.dailyStatus)) {
     plan.closureUpdatedAt = new Date();
   }

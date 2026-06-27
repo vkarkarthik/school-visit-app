@@ -1037,10 +1037,37 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                       {editablePlanId === plan._id && (
                         <div className="plan-editor">
                           <div className="plan-editor-head">
-                            <strong>Daily accountability update</strong>
-                            <span>Use this to mark progress, close the day, or flag blockers.</span>
+                            <strong>Daily update and reschedule</strong>
+                            <span>Use this to mark progress, shift the visit date/time, or flag blockers.</span>
                           </div>
                           <div className="form-grid">
+                            <label>
+                              Planned Date
+                              <input
+                                type="date"
+                                value={editForms[plan._id]?.plannedDate || ""}
+                                onChange={(e) => updateEditField(plan._id, "plannedDate", e.target.value)}
+                              />
+                            </label>
+
+                            <label>
+                              Start Time
+                              <input
+                                type="time"
+                                value={editForms[plan._id]?.plannedStartTime || ""}
+                                onChange={(e) => updateEditField(plan._id, "plannedStartTime", e.target.value)}
+                              />
+                            </label>
+
+                            <label>
+                              End Time
+                              <input
+                                type="time"
+                                value={editForms[plan._id]?.plannedEndTime || ""}
+                                onChange={(e) => updateEditField(plan._id, "plannedEndTime", e.target.value)}
+                              />
+                            </label>
+
                             <label>
                               Day Status
                               <select
@@ -1163,7 +1190,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                             className="table-action"
                             onClick={() => toggleEditor(plan)}
                           >
-                            {editablePlanId === plan._id ? "Hide Update" : "Update Day"}
+                            {editablePlanId === plan._id ? "Hide Update" : "Update / Reschedule"}
                           </button>
                           <button
                             type="button"
@@ -1222,6 +1249,9 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
 
 function buildEditForm(plan) {
   return {
+    plannedDate: plan.plannedDate ? new Date(plan.plannedDate).toISOString().slice(0, 10) : "",
+    plannedStartTime: plan.plannedStartTime || "",
+    plannedEndTime: plan.plannedEndTime || "",
     plannedLocation: plan.plannedLocation || "",
     priorityLevel: plan.priorityLevel || "Normal",
     dailyStatus: plan.dailyStatus || "Planned",
