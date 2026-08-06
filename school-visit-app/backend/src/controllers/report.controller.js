@@ -10,21 +10,11 @@ import { AppError } from "../utils/appError.js";
 import { generatePdfBuffer } from "../services/pdf.service.js";
 import { sendFollowUpReminderEmail, sendVisitReportEmail } from "../services/email.service.js";
 import { appendNewSchoolToSheet, appendPlanLogToSheet, getSchoolMaster, isPlannerSheetQuotaError, schedulePlannerDashboardRefresh } from "../services/sheets.service.js";
+import { getAdminEmailSet } from "../services/settings.service.js";
 import { VisitReport } from "../models/VisitReport.js";
 import { VisitPlan } from "../models/VisitPlan.js";
 import { buildReportHtml } from "../utils/htmlReportTemplate.js";
 import { buildPdfReportHtml } from "../utils/pdfReportTemplate.js";
-
-const ADMIN_EMAILS = new Set([
-  "karthik@superteacher.in",
-  "karthikv@superteacher.in",
-  "vasudevan@superteacher.in",
-  "bhanu@superteacher.in",
-  "manmohan@superteacher.in",
-  "jayasri@superteacher.co.in",
-  "marichelvam@superteacher.in",
-  "sukumar@superteacher.in",
-]);
 
 const memoryStorage = multer.memoryStorage();
 export const upload = multer({ storage: memoryStorage });
@@ -42,10 +32,6 @@ function normalizeWorkMode(value) {
   return ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"].includes(value)
     ? value
     : "School Visit";
-}
-
-function isAdminEmail(value) {
-  return ADMIN_EMAILS.has(String(value || "").trim().toLowerCase());
 }
 
 function normalizeManagerKey(email, name) {
@@ -494,6 +480,8 @@ export const getSchoolTrackingController = asyncHandler(async (req, res) => {
 });
 
 export const getReportsDashboardController = asyncHandler(async (req, res) => {
+  const adminEmailSet = await getAdminEmailSet();
+  const isAdminEmail = (value) => adminEmailSet.has(String(value || "").trim().toLowerCase());
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const todayStart = new Date(now);

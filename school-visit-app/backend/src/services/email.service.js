@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { env } from "../config/env.js";
+import { getCommonCcString } from "./settings.service.js";
 
 const serviceDir = dirname(fileURLToPath(import.meta.url));
 const logoPath = join(serviceDir, "../../assets/superteacher-logo.png");
@@ -103,7 +104,8 @@ function getFromDetails() {
 }
 
 export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdfBuffer }) {
-  const ccList = mergeEmailLists(replyTo, env.smtp.cc, cc);
+  const commonCc = await getCommonCcString();
+  const ccList = mergeEmailLists(replyTo, commonCc, cc);
   const logoBase64 = existsSync(logoPath) ? readFileSync(logoPath).toString("base64") : "";
 
   if (env.gmailScriptUrl) {
@@ -207,7 +209,7 @@ function buildPlanNotificationHtml(plan) {
 
 export async function sendPlanNotificationEmail(plan) {
   const to = plan.programManagerEmail;
-  const cc = env.smtp.cc;
+  const cc = await getCommonCcString();
   const subject = `Visit Plan Confirmed | ${plan.schoolName} | ${plan.programManagerName} | ${new Date(plan.plannedDate).toLocaleDateString("en-IN")}`;
   const html = buildPlanNotificationHtml(plan);
   const logoBase64 = existsSync(logoPath) ? readFileSync(logoPath).toString("base64") : "";
@@ -316,6 +318,7 @@ async function sendSimpleOperationalEmail({ to, cc, replyTo, subject, html }) {
 }
 
 export async function sendPlanReminderEmail(plan) {
+  const commonCc = await getCommonCcString();
   const dateLabel = plan.plannedDate ? new Date(plan.plannedDate).toLocaleDateString("en-IN") : "";
   const html = `
     <div style="font-family: Arial, sans-serif; color: #17202a; line-height: 1.6;">
@@ -333,7 +336,7 @@ export async function sendPlanReminderEmail(plan) {
 
   return sendSimpleOperationalEmail({
     to: plan.programManagerEmail,
-    cc: env.smtp.cc,
+    cc: commonCc,
     replyTo: plan.programManagerEmail,
     subject: `Visit Reminder | ${plan.schoolName} | ${dateLabel}`,
     html,
@@ -341,6 +344,7 @@ export async function sendPlanReminderEmail(plan) {
 }
 
 export async function sendFollowUpReminderEmail(report) {
+  const commonCc = await getCommonCcString();
   const nextVisitLabel = report.nextVisitDate ? new Date(report.nextVisitDate).toLocaleDateString("en-IN") : "Not scheduled";
   const html = `
     <div style="font-family: Arial, sans-serif; color: #17202a; line-height: 1.6;">
@@ -357,7 +361,7 @@ export async function sendFollowUpReminderEmail(report) {
 
   return sendSimpleOperationalEmail({
     to: report.programManagerEmail,
-    cc: env.smtp.cc,
+    cc: commonCc,
     replyTo: report.programManagerEmail,
     subject: `Follow-up Reminder | ${report.schoolName} | ${nextVisitLabel}`,
     html,

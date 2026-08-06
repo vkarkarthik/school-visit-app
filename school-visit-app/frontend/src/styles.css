@@ -2631,6 +2631,60 @@ tbody tr:last-child td {
   margin-top: 12px;
 }
 
+.panel-subsection {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+
+.compact-panel-header {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.compact-panel-header h3 {
+  margin: 2px 0 0;
+  font-size: 20px;
+  color: #143624;
+}
+
+.manager-settings-list {
+  display: grid;
+  gap: 12px;
+}
+
+.manager-settings-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.1fr) minmax(240px, 1.2fr) 110px 90px;
+  gap: 12px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfffd;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.checkbox-label input {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+}
+
+.danger-action {
+  color: var(--danger);
+  border-color: rgba(168, 69, 57, 0.28);
+  background: #fff8f6;
+}
+
 .field-error {
   color: var(--danger);
   font-size: 12px;
@@ -2770,6 +2824,7 @@ a {
   .form-grid,
   .tracking-filter-grid,
   .profile-grid,
+  .manager-settings-row,
   .identity-panel,
   .identity-grid,
   .mode-toggle,
