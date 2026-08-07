@@ -1,19 +1,9 @@
 import { OAuth2Client } from "google-auth-library";
 import { env } from "../config/env.js";
+import { isAdminEmail } from "../services/settings.service.js";
 
 const googleAuthClient = env.googleOAuthClientId ? new OAuth2Client(env.googleOAuthClientId) : null;
 const ALLOWED_EMAIL_DOMAINS = ["@superteacher.in", "@superteacher.co.in"];
-
-export const ADMIN_EMAILS = new Set([
-  "karthik@superteacher.in",
-  "karthikv@superteacher.in",
-  "vasudevan@superteacher.in",
-  "bhanu@superteacher.in",
-  "manmohan@superteacher.in",
-  "jayasri@superteacher.co.in",
-  "marichelvam@superteacher.in",
-  "sukumar@superteacher.in",
-]);
 
 function isAllowedSuperTeacherEmail(email) {
   const normalizedEmail = String(email || "").trim().toLowerCase();
@@ -64,7 +54,7 @@ export async function requireUser(req, res, next) {
     }
 
     req.userEmail = email;
-    req.isAdmin = ADMIN_EMAILS.has(email);
+    req.isAdmin = await isAdminEmail(email);
     next();
   } catch (error) {
     return res.status(401).json({

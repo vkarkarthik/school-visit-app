@@ -6,6 +6,7 @@ import { env } from './config/env.js';
 import schoolRoutes from './routes/school.routes.js';
 import reportRoutes from './routes/report.routes.js';
 import planRoutes from './routes/plan.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
 
 const app = express();
 const appDir = dirname(fileURLToPath(import.meta.url));
@@ -38,6 +39,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api/schools', schoolRoutes);
+app.use('/api/settings', settingsRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/plans', planRoutes);
 

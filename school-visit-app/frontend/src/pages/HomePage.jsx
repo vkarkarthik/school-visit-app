@@ -11,16 +11,20 @@ import TrackingDashboard from '../components/TrackingDashboard';
 
 const SCHOOL_MASTER_CACHE_KEY = 'schoolVisitSchoolMasterCache';
 const ALLOWED_EMAIL_DOMAINS = ['@superteacher.in', '@superteacher.co.in'];
-const ADMIN_EMAILS = new Set([
-  'karthik@superteacher.in',
-  'karthikv@superteacher.in',
-  'vasudevan@superteacher.in',
-  'bhanu@superteacher.in',
-  'manmohan@superteacher.in',
-  'jayasri@superteacher.co.in',
-  'marichelvam@superteacher.in',
-  'sukumar@superteacher.in'
-]);
+const DEFAULT_APP_SETTINGS = {
+  adminEmails: [
+    'karthik@superteacher.in',
+    'karthikv@superteacher.in',
+    'vasudevan@superteacher.in',
+    'bhanu@superteacher.in',
+    'manmohan@superteacher.in',
+    'jayasri@superteacher.co.in',
+    'marichelvam@superteacher.in',
+    'sukumar@superteacher.in'
+  ],
+  commonCc: ['vasudevan@superteacher.in', 'bhanu@superteacher.in', 'manmohan@superteacher.in', 'jayasri@superteacher.co.in'],
+  programManagers: []
+};
 
 const emptyUser = {
   name: '',
@@ -31,10 +35,11 @@ const emptyUser = {
   picture: ''
 };
 
-function normalizeUser(user) {
+function normalizeUser(user, adminEmails = DEFAULT_APP_SETTINGS.adminEmails) {
   const email = String(user?.email || '');
   const normalizedEmail = email.trim().toLowerCase();
-  const derivedRole = ADMIN_EMAILS.has(normalizedEmail) ? 'Admin / Team Lead' : String(user?.role || 'Program Manager');
+  const adminEmailSet = new Set(adminEmails.map((item) => String(item || '').trim().toLowerCase()));
+  const derivedRole = adminEmailSet.has(normalizedEmail) ? 'Admin / Team Lead' : String(user?.role || 'Program Manager');
 
   return {
     name: String(user?.name || ''),
@@ -72,6 +77,8 @@ function isAllowedSuperTeacherEmail(email) {
 }
 
 export default function HomePage() {
+  const [appSettings, setAppSettings] = useState(DEFAULT_APP_SETTINGS);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [schoolMaster, setSchoolMaster] = useState(() => readCachedSchoolMaster() || { states: [], schools: [] });
   const [loading, setLoading] = useState(true);
   const [schoolMasterStatus, setSchoolMasterStatus] = useState(() => (readCachedSchoolMaster() ? 'cached' : 'loading'));
@@ -82,7 +89,7 @@ export default function HomePage() {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem('schoolVisitUser');
-      if (saved) return normalizeUser(JSON.parse(saved));
+      if (saved) return normalizeUser(JSON.parse(saved), DEFAULT_APP_SETTINGS.adminEmails);
     } catch {
       localStorage.removeItem('schoolVisitUser');
     }
@@ -91,14 +98,55 @@ export default function HomePage() {
   });
 
   useEffect(() => {
-    localStorage.setItem('schoolVisitUser', JSON.stringify(normalizeUser(currentUser)));
-  }, [currentUser]);
+    localStorage.setItem('schoolVisitUser', JSON.stringify(normalizeUser(currentUser, appSettings.adminEmails)));
+  }, [currentUser, appSettings.adminEmails]);
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const response = await api.get('/settings/public');
+        setAppSettings({
+          adminEmails: Array.isArray(response.data.adminEmails) ? response.data.adminEmails : DEFAULT_APP_SETTINGS.adminEmails,
+          commonCc: Array.isArray(response.data.commonCc) ? response.data.commonCc : DEFAULT_APP_SETTINGS.commonCc,
+          programManagers: Array.isArray(response.data.programManagers) ? response.data.programManagers : DEFAULT_APP_SETTINGS.programManagers
+        });
+      } catch {
+        setAppSettings(DEFAULT_APP_SETTINGS);
+      }
+    }
+
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    setCurrentUser((prev) => normalizeUser(prev, appSettings.adminEmails));
+  }, [appSettings.adminEmails]);
+
+  const adminEmailSet = new Set(appSettings.adminEmails.map((item) => String(item || '').trim().toLowerCase()));
 
   const isLoggedIn =
     String(currentUser.name || '').trim() &&
     isAllowedSuperTeacherEmail(currentUser.email);
-  const isAdmin = ADMIN_EMAILS.has(String(currentUser.email || '').trim().toLowerCase());
+  const isAdmin = adminEmailSet.has(String(currentUser.email || '').trim().toLowerCase());
   const displayRole = isAdmin ? 'Admin / Team Lead' : currentUser.role || 'Program Manager';
+
+  async function handleSaveSettings(nextSettings) {
+    setSavingSettings(true);
+    try {
+      const response = await api.put('/settings', nextSettings);
+      const updated = {
+        adminEmails: Array.isArray(response.data.adminEmails) ? response.data.adminEmails : [],
+        commonCc: Array.isArray(response.data.commonCc) ? response.data.commonCc : [],
+        programManagers: Array.isArray(response.data.programManagers) ? response.data.programManagers : []
+      };
+      setAppSettings(updated);
+      return { ok: true, message: response.data.message || 'Settings updated.' };
+    } catch (error) {
+      return { ok: false, message: error.response?.data?.message || 'Could not update settings.' };
+    } finally {
+      setSavingSettings(false);
+    }
+  }
 
   useEffect(() => {
     const allowedViews = isAdmin
@@ -187,7 +235,7 @@ export default function HomePage() {
 
         <GoogleLoginPanel
           currentUser={currentUser}
-          onLogin={(user) => setCurrentUser(normalizeUser(user))}
+          onLogin={(user) => setCurrentUser(normalizeUser(user, appSettings.adminEmails))}
           onLogout={() => {
             localStorage.removeItem('schoolVisitUser');
             setCurrentUser(emptyUser);
@@ -338,6 +386,7 @@ export default function HomePage() {
                   schoolMaster={schoolMaster}
                   currentUser={currentUser}
                   isAdmin={isAdmin}
+                  appSettings={appSettings}
                   onConvertToReport={(plan) => {
                     setPlanToConvert(plan);
                     setActiveView('report');
@@ -365,7 +414,9 @@ export default function HomePage() {
 
             {activeView === 'dashboard' && <OperationsDashboard />}
 
-            {activeView === 'settings' && <AdminSettings />}
+            {activeView === 'settings' && (
+              <AdminSettings settings={appSettings} onSaveSettings={handleSaveSettings} savingSettings={savingSettings} />
+            )}
           </>
         )}
       </main>

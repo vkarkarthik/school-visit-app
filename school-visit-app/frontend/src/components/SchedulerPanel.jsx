@@ -101,7 +101,7 @@ const emptyForm = (currentUser = {}) => ({
   closureNotes: "",
 });
 
-export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onConvertToReport }) {
+export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, appSettings, onConvertToReport }) {
   const today = useMemo(() => new Date(), []);
   const defaultFrom = useMemo(() => formatDateInput(today), [today]);
   const defaultTo = useMemo(() => formatDateInput(addDays(today, 30)), [today]);
@@ -135,6 +135,32 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
   const isSchoolVisitMode = form.workMode === "School Visit";
   const workModeCopy = useMemo(() => getWorkModeCopy(form.workMode), [form.workMode]);
+  const rosterManagers = useMemo(() => {
+    const managerMap = new Map();
+
+    for (const manager of appSettings?.programManagers || []) {
+      const email = String(manager.email || "").trim().toLowerCase();
+      const name = String(manager.name || "").trim();
+      if (!email || !name || manager.active === false) continue;
+      managerMap.set(email, { email, name });
+    }
+
+    for (const plan of plans) {
+      const email = String(plan.programManagerEmail || "").trim().toLowerCase();
+      const name = String(plan.programManagerName || email || "Unknown PM").trim();
+      if (!email || managerMap.has(email)) continue;
+      managerMap.set(email, { email, name });
+    }
+
+    if (currentUser?.email) {
+      const email = String(currentUser.email || "").trim().toLowerCase();
+      if (email && !managerMap.has(email)) {
+        managerMap.set(email, { email, name: currentUser?.name || email });
+      }
+    }
+
+    return [...managerMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [appSettings?.programManagers, currentUser?.email, currentUser?.name, plans]);
 
   useEffect(() => {
     setForm((prev) => ({
@@ -222,6 +248,16 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
         contactNo: value === "School Visit" ? prev.contactNo : "",
         schoolEmail: value === "School Visit" ? prev.schoolEmail : "",
         course: value === "School Visit" ? prev.course : "",
+      }));
+      return;
+    }
+
+    if (name === "programManagerEmail" && isAdmin) {
+      const selectedManager = rosterManagers.find((manager) => manager.email === value);
+      setForm((prev) => ({
+        ...prev,
+        programManagerEmail: value,
+        programManagerName: selectedManager?.name || prev.programManagerName,
       }));
       return;
     }
@@ -349,7 +385,9 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
   }, [includeClosed, plans]);
 
   const programManagerOptions = useMemo(() => {
-    const uniqueManagers = new Map();
+    const uniqueManagers = new Map(
+      rosterManagers.map((manager) => [manager.email, manager.name])
+    );
 
     for (const plan of plans) {
       const email = plan.programManagerEmail || "";
@@ -362,7 +400,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
     return [...uniqueManagers.entries()]
       .map(([email, name]) => ({ email, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [plans]);
+  }, [plans, rosterManagers]);
 
   useEffect(() => {
     setExpandedGroups((prev) => {
@@ -674,13 +712,29 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
               <div className="form-grid">
                 <label>
                   Program Manager
-                  <input
-                    name="programManagerName"
-                    value={form.programManagerName}
-                    onChange={handleChange}
-                    readOnly={!isAdmin}
-                    required
-                  />
+                  {isAdmin ? (
+                    <select
+                      name="programManagerEmail"
+                      value={form.programManagerEmail}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="">Select program manager</option>
+                      {rosterManagers.map((manager) => (
+                        <option key={manager.email} value={manager.email}>
+                          {manager.name} ({manager.email})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      name="programManagerName"
+                      value={form.programManagerName}
+                      onChange={handleChange}
+                      readOnly
+                      required
+                    />
+                  )}
                 </label>
 
                 <label>
@@ -690,10 +744,23 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, onC
                     name="programManagerEmail"
                     value={form.programManagerEmail}
                     onChange={handleChange}
-                    readOnly={!isAdmin}
+                    readOnly
                     required
                   />
                 </label>
+
+                {isAdmin && (
+                  <label>
+                    Program Manager Name
+                    <input
+                      name="programManagerName"
+                      value={form.programManagerName}
+                      onChange={handleChange}
+                      readOnly
+                      required
+                    />
+                  </label>
+                )}
 
                 {!isAdmin && (
                   <div className="full-span help-text">
