@@ -102,7 +102,7 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
 
         <div className="manager-settings-list">
           {(draft.programManagers || []).map((manager, index) => (
-            <div className="manager-settings-row" key={`${manager.email || 'new'}-${index}`}>
+            <div className="manager-settings-row" key={`manager-${index}`}>
               <label>
                 Name
                 <input
@@ -115,10 +115,13 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
               <label>
                 Email
                 <input
-                  type="email"
+                  type="text"
                   value={manager.email}
                   onChange={(e) => updateManager(index, 'email', e.target.value)}
                   placeholder="name@superteacher.in"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
               </label>
 

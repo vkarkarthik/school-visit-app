@@ -17,10 +17,12 @@ const allowedOrigins = String(env.frontendUrl || '')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const trustedVercelOriginPattern = /^https:\/\/school-visit(?:-app)?[-a-z0-9]*\.vercel\.app$/i;
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin) || /^https:\/\/school-visit-app.*\.vercel\.app$/.test(origin)) {
+      if (!origin || allowedOrigins.includes(origin) || trustedVercelOriginPattern.test(origin)) {
         callback(null, true);
         return;
       }
