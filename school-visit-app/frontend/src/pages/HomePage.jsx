@@ -8,6 +8,7 @@ import OperationsDashboard from '../components/OperationsDashboard';
 import SchedulerPanel from '../components/SchedulerPanel';
 import SchoolVisitForm from '../components/SchoolVisitForm';
 import TrackingDashboard from '../components/TrackingDashboard';
+import TrainingReportsPanel from '../components/TrainingReportsPanel';
 
 const SCHOOL_MASTER_CACHE_KEY = 'schoolVisitSchoolMasterCache';
 const ALLOWED_EMAIL_DOMAINS = ['@superteacher.in', '@superteacher.co.in'];
@@ -165,8 +166,8 @@ export default function HomePage() {
 
   useEffect(() => {
     const allowedViews = isAdmin
-      ? new Set(['home', 'scheduler', 'report', 'drafts', 'tracking', 'dashboard', 'settings'])
-      : new Set(['home', 'scheduler', 'report', 'drafts', 'tracking']);
+      ? new Set(['home', 'scheduler', 'report', 'drafts', 'tracking', 'trainings', 'dashboard', 'settings'])
+      : new Set(['home', 'scheduler', 'report', 'drafts', 'tracking', 'trainings']);
 
     if (!allowedViews.has(activeView)) {
       setActiveView('home');
@@ -355,6 +356,13 @@ export default function HomePage() {
               >
                 Tracking
               </button>
+              <button
+                type="button"
+                className={activeView === 'trainings' ? 'active' : ''}
+                onClick={() => setActiveView('trainings')}
+              >
+                Trainings
+              </button>
               {isAdmin && (
                 <>
                   <button
@@ -424,6 +432,12 @@ export default function HomePage() {
             {activeView === 'tracking' && (
               <div className="single-workspace">
                 <TrackingDashboard schoolMaster={schoolMaster} currentUser={currentUser} isAdmin={isAdmin} appSettings={appSettings} />
+              </div>
+            )}
+
+            {activeView === 'trainings' && (
+              <div className="single-workspace">
+                <TrainingReportsPanel schoolMaster={schoolMaster} currentUser={currentUser} isAdmin={isAdmin} appSettings={appSettings} />
               </div>
             )}
 

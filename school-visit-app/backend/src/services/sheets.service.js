@@ -123,6 +123,7 @@ function mapRowsToSchools(rows, fallbackState = "") {
   const contactIndex = getIndex("Contact No", "Contact Number");
   const emailIndex = getIndex("Email");
   const courseIndex = getIndex("Course Selected (2026-2027)", "Course Selected", "Course");
+  const inductionStatusIndex = getIndex("Induction Training Status");
 
   if (schoolIndex === -1) {
     console.warn("Skipping sheet because School Name column not found");
@@ -143,6 +144,8 @@ function mapRowsToSchools(rows, fallbackState = "") {
       contactNo: contactIndex !== -1 ? String(row[contactIndex] || "").trim() : "",
       email: emailIndex !== -1 ? String(row[emailIndex] || "").trim() : "",
       course: courseIndex !== -1 ? String(row[courseIndex] || "").trim() : "",
+      inductionTrainingStatus:
+        inductionStatusIndex !== -1 ? String(row[inductionStatusIndex] || "").trim() : "",
     }));
 }
 

@@ -2,6 +2,8 @@ import { Router } from 'express';import {
   createReportController,
   exportReportsController,
   getCoverageGapsController,
+  getMyCoverageController,
+  getPmCoverageController,
   getProductivityController,
   getReportsDashboardController,
   getReportPdfController,
@@ -20,6 +22,8 @@ router.post('/preview-pdf', previewReportPdfController);
 router.get('/export', requireAdmin, exportReportsController);
 router.get('/productivity', requireAdmin, getProductivityController);
 router.get('/coverage-gaps', requireAdmin, getCoverageGapsController);
+router.get('/my-coverage', requireUser, getMyCoverageController);
+router.get('/pm-coverage', requireAdmin, getPmCoverageController);
 router.get('/:id/pdf', requireAdmin, getReportPdfController);
 router.get('/dashboard', requireAdmin, getReportsDashboardController);
 router.get('/tracking', requireUser, getSchoolTrackingController);

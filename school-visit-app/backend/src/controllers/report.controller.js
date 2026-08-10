@@ -13,6 +13,7 @@ import { appendNewSchoolToSheet, appendPlanLogToSheet, getSchoolMaster, isPlanne
 import { getAdminEmailSet, getAppSettings } from "../services/settings.service.js";
 import { VisitReport } from "../models/VisitReport.js";
 import { VisitPlan } from "../models/VisitPlan.js";
+import { TrainingReport } from "../models/TrainingReport.js";
 import { buildReportHtml } from "../utils/htmlReportTemplate.js";
 import { buildPdfReportHtml } from "../utils/pdfReportTemplate.js";
 
@@ -1110,9 +1111,10 @@ export const getProductivityController = asyncHandler(async (req, res) => {
   const { start, end, label } = buildPeriodRange(req.query, now);
   const overdueNow = now;
 
-  const [reports, plans] = await Promise.all([
+  const [reports, plans, trainings] = await Promise.all([
     VisitReport.find({ visitDate: { $gte: start, $lt: end } }).lean(),
     VisitPlan.find({ plannedDate: { $gte: start, $lt: end } }).lean(),
+    TrainingReport.find({ date: { $gte: start, $lt: end } }).lean(),
   ]);
 
   const managerMap = new Map();
@@ -1141,6 +1143,8 @@ export const getProductivityController = asyncHandler(async (req, res) => {
         dayBlocked: 0,
         fieldPlans: 0,
         internalPlans: 0,
+        trainings: 0,
+        trainingAttendees: 0,
         latestActivityDate: null,
       });
     }
@@ -1185,6 +1189,15 @@ export const getProductivityController = asyncHandler(async (req, res) => {
     }
   }
 
+  for (const training of trainings) {
+    const entry = addManager(training.programManagerEmail, training.programManagerName);
+    entry.trainings += 1;
+    entry.trainingAttendees += Number(training.attendanceCount || 0);
+    if (!entry.latestActivityDate || new Date(training.date) > new Date(entry.latestActivityDate)) {
+      entry.latestActivityDate = training.date;
+    }
+  }
+
   const byManager = [...managerMap.values()]
     .map((entry) => ({
       ...entry,
@@ -1211,6 +1224,8 @@ export const getProductivityController = asyncHandler(async (req, res) => {
       dayBlocked: acc.dayBlocked + entry.dayBlocked,
       fieldPlans: acc.fieldPlans + entry.fieldPlans,
       internalPlans: acc.internalPlans + entry.internalPlans,
+      trainings: acc.trainings + entry.trainings,
+      trainingAttendees: acc.trainingAttendees + entry.trainingAttendees,
     }),
     {
       reports: 0,
@@ -1230,6 +1245,8 @@ export const getProductivityController = asyncHandler(async (req, res) => {
       dayBlocked: 0,
       fieldPlans: 0,
       internalPlans: 0,
+      trainings: 0,
+      trainingAttendees: 0,
     }
   );
 
@@ -1326,6 +1343,113 @@ export const getCoverageGapsController = asyncHandler(async (req, res) => {
     byState,
     gaps: gaps.slice(0, 1000),
   });
+});
+
+async function buildPmCoverage(email, months = 12, stateFilter = '') {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const windowMonths = Math.max(1, Math.min(120, Number(months) || 12));
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - windowMonths);
+
+  const schoolMaster = await getSchoolMaster().catch(() => ({ states: [], schools: [] }));
+  const masterSchools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
+  const oldestRelevant = new Date();
+  oldestRelevant.setFullYear(oldestRelevant.getFullYear() - 10);
+
+  const reports = await VisitReport.find(
+    { visitDate: { $gte: oldestRelevant }, programManagerEmail: normalizedEmail },
+    { state: 1, schoolName: 1, visitDate: 1, city: 1, _id: 0 }
+  ).lean();
+
+  const lastVisitBySchool = new Map();
+  for (const report of reports) {
+    const key = `${String(report.state || '').trim().toLowerCase()}__${String(report.schoolName || '').trim().toLowerCase()}`;
+    if (key.endsWith('__')) continue;
+    const entry = lastVisitBySchool.get(key) || { lastVisitDate: null, totalVisits: 0 };
+    entry.totalVisits += 1;
+    if (report.visitDate && (!entry.lastVisitDate || new Date(report.visitDate) > new Date(entry.lastVisitDate))) {
+      entry.lastVisitDate = report.visitDate;
+    }
+    lastVisitBySchool.set(key, entry);
+  }
+
+  const covered = [];
+  const notCovered = [];
+  const stateCounts = new Map();
+  const monthMs = 1000 * 60 * 60 * 24 * 30.44;
+
+  for (const school of masterSchools) {
+    const stateName = String(school.state || '').trim();
+    const schoolName = String(school.schoolName || '').trim();
+    if (!stateName || !schoolName) continue;
+    if (stateFilter && stateName.toLowerCase() !== stateFilter.toLowerCase()) continue;
+
+    const key = `${stateName.toLowerCase()}__${schoolName.toLowerCase()}`;
+    const visit = lastVisitBySchool.get(key);
+    const lastVisitDate = visit?.lastVisitDate || null;
+    const isCovered = Boolean(lastVisitDate) && new Date(lastVisitDate) >= cutoff;
+
+    const entry = {
+      state: stateName,
+      schoolName,
+      city: String(school.city || '').trim(),
+      lastVisitDate,
+      totalVisits: visit?.totalVisits || 0,
+      monthsSinceLastVisit: lastVisitDate
+        ? Math.max(1, Math.floor((Date.now() - new Date(lastVisitDate).getTime()) / monthMs))
+        : null,
+    };
+
+    if (isCovered) {
+      covered.push(entry);
+      const stateEntry = stateCounts.get(stateName) || { covered: 0, notCovered: 0 };
+      stateEntry.covered += 1;
+      stateCounts.set(stateName, stateEntry);
+    } else {
+      notCovered.push({ ...entry, status: lastVisitDate ? 'Stale' : 'Never Visited' });
+      const stateEntry = stateCounts.get(stateName) || { covered: 0, notCovered: 0 };
+      stateEntry.notCovered += 1;
+      stateCounts.set(stateName, stateEntry);
+    }
+  }
+
+  covered.sort((a, b) => a.schoolName.localeCompare(b.schoolName));
+  notCovered.sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'Never Visited' ? -1 : 1;
+    return (b.monthsSinceLastVisit ?? 9999) - (a.monthsSinceLastVisit ?? 9999) || a.schoolName.localeCompare(b.schoolName);
+  });
+
+  const totalSchools = covered.length + notCovered.length;
+
+  return {
+    months: windowMonths,
+    cutoffDate: cutoff,
+    summary: {
+      totalSchools,
+      covered: covered.length,
+      notCovered: notCovered.length,
+      coveragePercent: totalSchools ? Math.round((covered.length / totalSchools) * 100) : 0,
+    },
+    byState: [...stateCounts.entries()]
+      .map(([state, counts]) => ({ state, ...counts, total: counts.covered + counts.notCovered }))
+      .sort((a, b) => b.total - a.total),
+    coveredSchools: covered.slice(0, 1000),
+    notCoveredSchools: notCovered.slice(0, 1000),
+  };
+}
+
+export const getMyCoverageController = asyncHandler(async (req, res) => {
+  const coverage = await buildPmCoverage(req.userEmail, req.query.months, req.query.state);
+  res.json({ success: true, ...coverage });
+});
+
+export const getPmCoverageController = asyncHandler(async (req, res) => {
+  const pm = String(req.query.pm || '').trim();
+  if (!pm) {
+    throw new AppError('A program manager email is required.', 400);
+  }
+  const coverage = await buildPmCoverage(pm, req.query.months, req.query.state);
+  res.json({ success: true, ...coverage });
 });
 
 export const previewReportPdfController = asyncHandler(async (req, res) => {
