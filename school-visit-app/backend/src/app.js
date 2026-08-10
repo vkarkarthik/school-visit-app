@@ -7,6 +7,7 @@ import schoolRoutes from './routes/school.routes.js';
 import reportRoutes from './routes/report.routes.js';
 import planRoutes from './routes/plan.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
+import trainingRoutes from './routes/training.routes.js';
 
 const app = express();
 const appDir = dirname(fileURLToPath(import.meta.url));
@@ -44,6 +45,7 @@ app.use('/api/schools', schoolRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/plans', planRoutes);
+app.use('/api/trainings', trainingRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

@@ -23,6 +23,7 @@ export default function OperationsDashboard() {
   const [gapState, setGapState] = useState('');
   const [coverage, setCoverage] = useState(null);
   const [coverageLoading, setCoverageLoading] = useState(false);
+  const [coveragePm, setCoveragePm] = useState('');
   const [exporting, setExporting] = useState('');
 
   useEffect(() => {
@@ -117,20 +118,35 @@ export default function OperationsDashboard() {
       setProductivityLoading(false);
     }
   };
-  const loadCoverage = async (monthsValue = gapMonths, stateValue = gapState) => {
+  const loadCoverage = async (monthsValue = gapMonths, stateValue = gapState, pmValue = coveragePm) => {
     setCoverageLoading(true);
     setMessage('');
     try {
-      const response = await api.get('/reports/coverage-gaps', {
-        params: { months: monthsValue, state: stateValue }
-      });
+      const params = { months: monthsValue, state: stateValue };
+      const url = pmValue ? '/reports/pm-coverage' : '/reports/coverage-gaps';
+      if (pmValue) params.pm = pmValue;
+      const response = await api.get(url, { params });
       setCoverage(response.data);
     } catch (error) {
-      setMessage(error.response?.data?.message || 'Coverage gaps could not be loaded.');
+      setMessage(error.response?.data?.message || 'Coverage could not be loaded.');
     } finally {
       setCoverageLoading(false);
     }
   };
+
+  const pmCoverageOptions = (dashboard?.byManager || [])
+    .filter((manager) => manager.email)
+    .map((manager) => ({ email: manager.email, name: manager.name || manager.email }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const coverageRows = coverage
+    ? coveragePm
+      ? [
+          ...(coverage.notCoveredSchools || []).map((school) => ({ ...school, listStatus: school.status || 'Not Covered' })),
+          ...(coverage.coveredSchools || []).map((school) => ({ ...school, listStatus: 'Covered' })),
+        ]
+      : (coverage.gaps || []).map((gap) => ({ ...gap, listStatus: gap.status }))
+    : [];
   const downloadCsv = async (url, filename) => {
     setExporting(filename);
     setMessage('');
@@ -737,6 +753,8 @@ export default function OperationsDashboard() {
                   <Metric label="Plans" value={productivity.totals?.plans} />
                   <Metric label="Plans Completed" value={productivity.totals?.completedPlans} tone="green" />
                   <Metric label="Converted" value={productivity.totals?.convertedPlans} tone="green" />
+                  <Metric label="Trainings" value={productivity.totals?.trainings} />
+                  <Metric label="Training Attendees" value={productivity.totals?.trainingAttendees} />
                   <Metric label="Pending Actions" value={productivity.totals?.pendingActions} tone="yellow" />
                   <Metric label="Overdue Follow-ups" value={productivity.totals?.overdueFollowUps} tone="red" />
                 </div>
@@ -755,6 +773,8 @@ export default function OperationsDashboard() {
                         <span>Plans {manager.plans}</span>
                         <span>Completed {manager.completedPlans}</span>
                         <span>Converted {manager.convertedPlans}</span>
+                        <span>Trainings {manager.trainings || 0}</span>
+                        <span>Attendees {manager.trainingAttendees || 0}</span>
                         <span>Actions {manager.pendingActions}</span>
                         <span>Overdue {manager.overdueFollowUps}</span>
                       </div>
@@ -787,6 +807,24 @@ export default function OperationsDashboard() {
                   ))}
                 </select>
               </label>
+              <label className="year-filter">
+                Program Manager
+                <select
+                  value={coveragePm}
+                  onChange={(e) => {
+                    const nextPm = e.target.value;
+                    setCoveragePm(nextPm);
+                    loadCoverage(gapMonths, gapState, nextPm);
+                  }}
+                >
+                  <option value="">All PMs (team gaps)</option>
+                  {pmCoverageOptions.map((pm) => (
+                    <option key={pm.email} value={pm.email}>
+                      {pm.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 className="secondary-button"
@@ -803,32 +841,46 @@ export default function OperationsDashboard() {
             ) : coverage ? (
               <>
                 <div className="dashboard-stats dashboard-stats-compact">
-                  <Metric label="Total Gaps" value={coverage.summary?.totalGaps} tone="red" />
-                  <Metric label="Never Visited" value={coverage.summary?.neverVisited} tone="red" />
-                  <Metric label="Stale" value={coverage.summary?.stale} tone="yellow" />
+                  {coveragePm ? (
+                    <>
+                      <Metric label="Covered" value={coverage.summary?.covered} tone="green" />
+                      <Metric label="Not Covered" value={coverage.summary?.notCovered} tone="red" />
+                      <Metric label="Coverage %" value={`${coverage.summary?.coveragePercent || 0}%`} />
+                    </>
+                  ) : (
+                    <>
+                      <Metric label="Total Gaps" value={coverage.summary?.totalGaps} tone="red" />
+                      <Metric label="Never Visited" value={coverage.summary?.neverVisited} tone="red" />
+                      <Metric label="Stale" value={coverage.summary?.stale} tone="yellow" />
+                    </>
+                  )}
                 </div>
 
                 <div className="report-list">
-                  {(coverage.gaps || []).slice(0, 200).map((gap) => (
-                    <div key={`${gap.state}-${gap.schoolName}`} className="report-row">
+                  {coverageRows.slice(0, 200).map((row) => (
+                    <div key={`${row.state}-${row.schoolName}-${row.city || ''}`} className="report-row">
                       <div>
-                        <strong>{gap.schoolName}</strong>
+                        <strong>{row.schoolName}</strong>
                         <span>
-                          {gap.state}
-                          {gap.city ? ` | ${gap.city}` : ''}
-                          {gap.lastVisitDate
-                            ? ` | Last visit ${new Date(gap.lastVisitDate).toLocaleDateString('en-IN')} (${gap.monthsSinceLastVisit} months ago)`
+                          {row.state}
+                          {row.city ? ` | ${row.city}` : ''}
+                          {row.lastVisitDate
+                            ? ` | Last visit ${new Date(row.lastVisitDate).toLocaleDateString('en-IN')} (${row.monthsSinceLastVisit} months ago)`
                             : ' | Never visited'}
-                          {' '}| {gap.totalVisits || 0} total visits
+                          {' '}| {row.totalVisits || 0} total visits
                         </span>
                       </div>
-                      <span className={`status-pill ${gap.status === 'Never Visited' ? 'failed' : 'warning'}`}>
-                        {gap.status}
+                      <span className={`status-pill ${row.listStatus === 'Covered' ? 'sent' : row.listStatus === 'Never Visited' ? 'failed' : 'warning'}`}>
+                        {row.listStatus}
                       </span>
                     </div>
                   ))}
-                  {!coverage.gaps?.length && (
-                    <div className="empty-state">No coverage gaps for this window. Every school was visited within the selected months.</div>
+                  {!coverageRows.length && (
+                    <div className="empty-state">
+                      {coveragePm
+                        ? 'No coverage data for this PM in the selected window.'
+                        : 'No coverage gaps for this window. Every school was visited within the selected months.'}
+                    </div>
                   )}
                 </div>
               </>

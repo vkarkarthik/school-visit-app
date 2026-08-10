@@ -2902,3 +2902,19 @@ a {
     max-width: 100%;
   }
 }
+
+
+/* Induction training status — per-state cards */
+.induction-status-grid {
+  align-items: start;
+}
+.induction-state-card .panel-header h2 {
+  font-size: 15px;
+}
+.induction-state-card .report-list {
+  max-height: 380px;
+  overflow-y: auto;
+}
+.induction-state-card .report-row {
+  padding: 8px 10px;
+}

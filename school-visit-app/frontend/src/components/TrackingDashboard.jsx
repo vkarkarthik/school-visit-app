@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
 
 function formatDateInput(date) {
@@ -42,7 +42,12 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin, 
   const [viewMode, setViewMode] = useState('cards');
   const [editingReport, setEditingReport] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');  const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
+  const [message, setMessage] = useState('');
+  const [coverage, setCoverage] = useState(null);
+  const [coverageLoading, setCoverageLoading] = useState(false);
+  const [coverageMonths, setCoverageMonths] = useState(12);
+  const [coverageTab, setCoverageTab] = useState('notCovered');
+  const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
   const hasSchoolMaster = states.length > 0 && schools.length > 0;
   const purposeOptions =
@@ -62,6 +67,22 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin, 
     Array.isArray(appSettings?.workModes) && appSettings.workModes.length
       ? appSettings.workModes
       : ['School Visit', 'Work From Home', 'Work From Office', 'Travel', 'Other'];
+
+  const loadMyCoverage = async (monthsValue = coverageMonths) => {
+    setCoverageLoading(true);
+    try {
+      const response = await api.get('/reports/my-coverage', { params: { months: monthsValue } });
+      setCoverage(response.data);
+    } catch {
+      setCoverage(null);
+    } finally {
+      setCoverageLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMyCoverage();
+  }, []);
 
   const fetchTracking = async (nextFilters, nextViewMode = viewMode, successMessage = '') => {
     setLoading(true);
@@ -576,6 +597,104 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin, 
           <strong>{summary.overdueFollowUps || 0}</strong>
         </button>
       </div>
+
+      {!isAdmin && (
+        <div className="panel panel-subsection my-coverage-panel">
+          <div className="panel-header compact">
+            <div>
+              <span className="eyebrow">My coverage</span>
+              <h3>Schools covered vs not covered</h3>
+            </div>
+            <div className="row-actions">
+              <label className="year-filter">
+                Months
+                <input
+                  type="number"
+                  min="1"
+                  max="120"
+                  value={coverageMonths}
+                  onChange={(e) => setCoverageMonths(e.target.value)}
+                />
+              </label>
+              <button type="button" className="table-action" onClick={() => loadMyCoverage()} disabled={coverageLoading}>
+                {coverageLoading ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
+          </div>
+          {coverageLoading ? (
+            <div className="status-text">Loading your coverage...</div>
+          ) : coverage ? (
+            <>
+              <div className="stats-row">
+                <div className="stat-card">
+                  <span>Total Schools</span>
+                  <strong>{coverage.summary?.totalSchools || 0}</strong>
+                </div>
+                <div className="stat-card">
+                  <span>Covered</span>
+                  <strong>{coverage.summary?.covered || 0}</strong>
+                </div>
+                <div className="stat-card">
+                  <span>Not Covered</span>
+                  <strong>{coverage.summary?.notCovered || 0}</strong>
+                </div>
+                <div className="stat-card">
+                  <span>Coverage %</span>
+                  <strong>{coverage.summary?.coveragePercent || 0}%</strong>
+                </div>
+              </div>
+              <div className="scheduler-presets" style={{ margin: '10px 0' }}>
+                <button
+                  type="button"
+                  className={`scheduler-chip ${coverageTab === 'notCovered' ? 'active' : ''}`}
+                  onClick={() => setCoverageTab('notCovered')}
+                >
+                  Not covered ({coverage.summary?.notCovered || 0})
+                </button>
+                <button
+                  type="button"
+                  className={`scheduler-chip ${coverageTab === 'covered' ? 'active' : ''}`}
+                  onClick={() => setCoverageTab('covered')}
+                >
+                  Covered ({coverage.summary?.covered || 0})
+                </button>
+              </div>
+              <div className="report-list">
+                {(coverageTab === 'covered' ? coverage.coveredSchools || [] : coverage.notCoveredSchools || [])
+                  .slice(0, 150)
+                  .map((school) => (
+                    <div key={`${school.state}-${school.schoolName}-${school.city || ''}`} className="report-row">
+                      <div>
+                        <strong>{school.schoolName}</strong>
+                        <span>
+                          {school.state}
+                          {school.city ? ` | ${school.city}` : ''}
+                          {school.lastVisitDate
+                            ? ` | Last visit ${new Date(school.lastVisitDate).toLocaleDateString('en-IN')} (${school.monthsSinceLastVisit} months ago)`
+                            : ' | Never visited'}
+                          {' | '}
+                          {school.totalVisits || 0} visits
+                        </span>
+                      </div>
+                      <span className={`status-pill ${coverageTab === 'covered' ? 'sent' : school.status === 'Never Visited' ? 'failed' : 'warning'}`}>
+                        {coverageTab === 'covered' ? 'Covered' : school.status}
+                      </span>
+                    </div>
+                  ))}
+                {!(coverageTab === 'covered' ? coverage.coveredSchools || [] : coverage.notCoveredSchools || []).length && (
+                  <div className="empty-state">
+                    {coverageTab === 'covered'
+                      ? 'No covered schools in this window yet. Keep visiting!'
+                      : 'Every school on your list is covered. Great work!'}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="empty-state">Could not load your school coverage.</div>
+          )}
+        </div>
+      )}
 
       {viewMode === 'cards' && (!reports.length ? (
         <div className="empty-state">No reports found.</div>
