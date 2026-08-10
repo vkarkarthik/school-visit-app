@@ -13,8 +13,29 @@ const appSettingsSchema = new mongoose.Schema(
   {
     key: { type: String, required: true, unique: true, default: "global" },
     adminEmails: [{ type: String, trim: true, lowercase: true }],
-    commonCc: [{ type: String, trim: true, lowercase: true }],
-    programManagers: [programManagerSchema],
+    commonCc: [{ type: String, trim: true, lowercase: true }],    programManagers: [programManagerSchema],
+    workModes: {
+      type: [String],
+      default: ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"],
+    },
+    visitPurposes: {
+      type: [String],
+      default: [
+        "New School Visit / Demo",
+        "Teachers Copy",
+        "Induction Training",
+        "Teachers Training",
+        "Robotics Training",
+        "Admin Related Work",
+        "Software Installation",
+        "Other Works",
+      ],
+    },
+    priorities: {
+      type: [String],
+      default: ["Critical", "High", "Normal"],
+    },
+
     updatedBy: { type: String, trim: true, lowercase: true, default: "" },
   },
   { timestamps: true }

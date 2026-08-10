@@ -21,9 +21,20 @@ const DEFAULT_APP_SETTINGS = {
     'jayasri@superteacher.co.in',
     'marichelvam@superteacher.in',
     'sukumar@superteacher.in'
+  ],  commonCc: ['vasudevan@superteacher.in', 'bhanu@superteacher.in', 'manmohan@superteacher.in', 'jayasri@superteacher.co.in'],
+  programManagers: [],
+  workModes: ['School Visit', 'Work From Home', 'Work From Office', 'Travel', 'Other'],
+  visitPurposes: [
+    'New School Visit / Demo',
+    'Teachers Copy',
+    'Induction Training',
+    'Teachers Training',
+    'Robotics Training',
+    'Admin Related Work',
+    'Software Installation',
+    'Other Works'
   ],
-  commonCc: ['vasudevan@superteacher.in', 'bhanu@superteacher.in', 'manmohan@superteacher.in', 'jayasri@superteacher.co.in'],
-  programManagers: []
+  priorities: ['Critical', 'High', 'Normal']
 };
 
 const emptyUser = {
@@ -104,11 +115,13 @@ export default function HomePage() {
   useEffect(() => {
     async function loadSettings() {
       try {
-        const response = await api.get('/settings/public');
-        setAppSettings({
+        const response = await api.get('/settings/public');        setAppSettings({
           adminEmails: Array.isArray(response.data.adminEmails) ? response.data.adminEmails : DEFAULT_APP_SETTINGS.adminEmails,
           commonCc: Array.isArray(response.data.commonCc) ? response.data.commonCc : DEFAULT_APP_SETTINGS.commonCc,
-          programManagers: Array.isArray(response.data.programManagers) ? response.data.programManagers : DEFAULT_APP_SETTINGS.programManagers
+          programManagers: Array.isArray(response.data.programManagers) ? response.data.programManagers : DEFAULT_APP_SETTINGS.programManagers,
+          workModes: Array.isArray(response.data.workModes) ? response.data.workModes : DEFAULT_APP_SETTINGS.workModes,
+          visitPurposes: Array.isArray(response.data.visitPurposes) ? response.data.visitPurposes : DEFAULT_APP_SETTINGS.visitPurposes,
+          priorities: Array.isArray(response.data.priorities) ? response.data.priorities : DEFAULT_APP_SETTINGS.priorities
         });
       } catch {
         setAppSettings(DEFAULT_APP_SETTINGS);
@@ -133,11 +146,13 @@ export default function HomePage() {
   async function handleSaveSettings(nextSettings) {
     setSavingSettings(true);
     try {
-      const response = await api.put('/settings', nextSettings);
-      const updated = {
+      const response = await api.put('/settings', nextSettings);      const updated = {
         adminEmails: Array.isArray(response.data.adminEmails) ? response.data.adminEmails : [],
         commonCc: Array.isArray(response.data.commonCc) ? response.data.commonCc : [],
-        programManagers: Array.isArray(response.data.programManagers) ? response.data.programManagers : []
+        programManagers: Array.isArray(response.data.programManagers) ? response.data.programManagers : [],
+        workModes: Array.isArray(response.data.workModes) ? response.data.workModes : [],
+        visitPurposes: Array.isArray(response.data.visitPurposes) ? response.data.visitPurposes : [],
+        priorities: Array.isArray(response.data.priorities) ? response.data.priorities : []
       };
       setAppSettings(updated);
       return { ok: true, message: response.data.message || 'Settings updated.' };
@@ -367,10 +382,10 @@ export default function HomePage() {
             )}
 
             {activeView === 'report' && (
-              <div className="single-workspace">
-                <SchoolVisitForm
+              <div className="single-workspace">                <SchoolVisitForm
                   schoolMaster={schoolMaster}
                   currentUser={currentUser}
+                  appSettings={appSettings}
                   draftToLoad={draftToLoad}
                   planToConvert={planToConvert}
                   onDraftLoaded={() => setDraftToLoad(null)}
@@ -408,7 +423,7 @@ export default function HomePage() {
 
             {activeView === 'tracking' && (
               <div className="single-workspace">
-                <TrackingDashboard schoolMaster={schoolMaster} currentUser={currentUser} isAdmin={isAdmin} />
+                <TrackingDashboard schoolMaster={schoolMaster} currentUser={currentUser} isAdmin={isAdmin} appSettings={appSettings} />
               </div>
             )}
 

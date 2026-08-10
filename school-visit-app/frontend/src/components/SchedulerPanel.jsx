@@ -132,9 +132,24 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, app
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
-  const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
-  const isSchoolVisitMode = form.workMode === "School Visit";
+  const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];  const isSchoolVisitMode = form.workMode === "School Visit";
   const workModeCopy = useMemo(() => getWorkModeCopy(form.workMode), [form.workMode]);
+  const workModeChoices = useMemo(() => {
+    const configured =
+      Array.isArray(appSettings?.workModes) && appSettings.workModes.length
+        ? appSettings.workModes
+        : WORK_MODE_CHOICES.map(([value]) => value);
+    const noteMap = new Map(WORK_MODE_CHOICES);
+    const withSchoolVisit = configured.includes("School Visit") ? configured : ["School Visit", ...configured];
+    return withSchoolVisit.map((value) => [
+      value,
+      noteMap.get(value) || "Use when the day fits this work bucket.",
+    ]);
+  }, [appSettings?.workModes]);
+  const priorityLevels =
+    Array.isArray(appSettings?.priorities) && appSettings.priorities.length
+      ? appSettings.priorities
+      : PRIORITY_LEVELS;
   const rosterManagers = useMemo(() => {
     const managerMap = new Map();
 
@@ -497,7 +512,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, app
           </div>
 
           <div className="mode-choice-grid">
-            {WORK_MODE_CHOICES.map(([value, note]) => (
+            {workModeChoices.map(([value, note]) => (
               <button
                 key={value}
                 type="button"
@@ -580,8 +595,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, app
 
               <label>
                 Priority
-                <select name="priorityLevel" value={form.priorityLevel} onChange={handleChange}>
-                  {PRIORITY_LEVELS.map((level) => (
+                <select name="priorityLevel" value={form.priorityLevel} onChange={handleChange}>                  {priorityLevels.map((level) => (
                     <option key={level} value={level}>
                       {level}
                     </option>
@@ -1154,8 +1168,7 @@ export default function SchedulerPanel({ schoolMaster, currentUser, isAdmin, app
                               <select
                                 value={editForms[plan._id]?.priorityLevel || "Normal"}
                                 onChange={(e) => updateEditField(plan._id, "priorityLevel", e.target.value)}
-                              >
-                                {PRIORITY_LEVELS.map((level) => (
+                              >                                {priorityLevels.map((level) => (
                                   <option key={level} value={level}>
                                     {level}
                                   </option>

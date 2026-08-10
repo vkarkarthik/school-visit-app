@@ -7,13 +7,23 @@ export default function OperationsDashboard() {
   const [message, setMessage] = useState('');
   const [year, setYear] = useState(new Date().getFullYear());
   const [previewReport, setPreviewReport] = useState(null);
-  const [activeBoard, setActiveBoard] = useState('overview');
-  const [reportFilters, setReportFilters] = useState({
+  const [activeBoard, setActiveBoard] = useState('overview');  const [reportFilters, setReportFilters] = useState({
     search: '',
     manager: '',
     purpose: '',
     status: '',
   });
+  const [month, setMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [productivity, setProductivity] = useState(null);
+  const [productivityLoading, setProductivityLoading] = useState(false);
+  const [gapMonths, setGapMonths] = useState(12);
+  const [gapState, setGapState] = useState('');
+  const [coverage, setCoverage] = useState(null);
+  const [coverageLoading, setCoverageLoading] = useState(false);
+  const [exporting, setExporting] = useState('');
 
   useEffect(() => {
     loadDashboard();
@@ -89,12 +99,56 @@ export default function OperationsDashboard() {
     if (note) {
       setMessage(note);
     }
-  };
-
-  const openOverviewBoard = (note = '') => {
+  };  const openOverviewBoard = (note = '') => {
     setActiveBoard('overview');
     if (note) {
       setMessage(note);
+    }
+  };
+  const loadProductivity = async (monthValue = month) => {
+    setProductivityLoading(true);
+    setMessage('');
+    try {
+      const response = await api.get('/reports/productivity', { params: { month: monthValue } });
+      setProductivity(response.data);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Productivity could not be loaded.');
+    } finally {
+      setProductivityLoading(false);
+    }
+  };
+  const loadCoverage = async (monthsValue = gapMonths, stateValue = gapState) => {
+    setCoverageLoading(true);
+    setMessage('');
+    try {
+      const response = await api.get('/reports/coverage-gaps', {
+        params: { months: monthsValue, state: stateValue }
+      });
+      setCoverage(response.data);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Coverage gaps could not be loaded.');
+    } finally {
+      setCoverageLoading(false);
+    }
+  };
+  const downloadCsv = async (url, filename) => {
+    setExporting(filename);
+    setMessage('');
+    try {
+      const response = await api.get(url, { responseType: 'blob' });
+      const blobUrl = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+      setMessage(`${filename} downloaded.`);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Export failed.');
+    } finally {
+      setExporting('');
     }
   };
 
@@ -105,11 +159,28 @@ export default function OperationsDashboard() {
           <span className="eyebrow">Operations overview</span>
           <h2>Operations control room</h2>
           <p className="muted-text">See today’s risk, pipeline movement, and PM execution without scrolling through one long page.</p>
+        </div>        <div className="export-actions">
+          <button
+            type="button"
+            className="table-action"
+            onClick={() => downloadCsv(`/reports/export?year=${year}`, `reports-${year || 'all'}.csv`)}
+            disabled={Boolean(exporting)}
+          >
+            {exporting === `reports-${year || 'all'}.csv` ? 'Exporting...' : 'Export Reports'}
+          </button>
+          <button
+            type="button"
+            className="table-action"
+            onClick={() => downloadCsv(`/plans/export?year=${year}`, `plans-${year || 'all'}.csv`)}
+            disabled={Boolean(exporting)}
+          >
+            {exporting === `plans-${year || 'all'}.csv` ? 'Exporting...' : 'Export Plans'}
+          </button>
+          <label className="year-filter">
+            Year
+            <input type="number" value={year} onChange={(e) => setYear(e.target.value)} />
+          </label>
         </div>
-        <label className="year-filter">
-          Year
-          <input type="number" value={year} onChange={(e) => setYear(e.target.value)} />
-        </label>
       </div>
 
       {message && <div className="status-text">{message}</div>}
@@ -152,11 +223,12 @@ export default function OperationsDashboard() {
 
           <div className="scheduler-toolbar ops-board-switcher">
             <div className="scheduler-presets">
-              {[
-                { id: 'overview', label: 'Overview' },
+              {[                { id: 'overview', label: 'Overview' },
                 { id: 'planner', label: 'Planner Board' },
                 { id: 'pipeline', label: 'Pipeline' },
                 { id: 'reports', label: 'Reports' },
+                { id: 'productivity', label: 'Productivity' },
+                { id: 'coverage', label: 'Coverage Gaps' },
               ].map((view) => (
                 <button
                   key={view.id}
@@ -632,9 +704,137 @@ export default function OperationsDashboard() {
                   <option value="Failed">Failed</option>
                 </select>
               </label>
+            </div>            <ReportCardGrid reports={filteredRecentReports} emptyText="No reports yet." onPreview={openPreview} />
+          </Panel>
+          )}
+
+          {activeBoard === 'productivity' && (
+          <Panel title="PM Productivity">
+            <div className="scheduler-toolbar">
+              <label className="year-filter">
+                Month
+                <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+              </label>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => loadProductivity()}
+                disabled={productivityLoading}
+              >
+                {productivityLoading ? 'Loading...' : 'Load Productivity'}
+              </button>
+              <span className="muted-text">Reports and plans per program manager for the selected month.</span>
             </div>
 
-            <ReportCardGrid reports={filteredRecentReports} emptyText="No reports yet." onPreview={openPreview} />
+            {productivityLoading ? (
+              <div className="status-text">Loading productivity...</div>
+            ) : productivity ? (
+              <>
+                <div className="dashboard-stats dashboard-stats-compact">
+                  <Metric label="Reports" value={productivity.totals?.reports} tone="green" />
+                  <Metric label="Visits" value={productivity.totals?.visits} tone="blue" />
+                  <Metric label="Internal" value={productivity.totals?.internalReports} />
+                  <Metric label="Plans" value={productivity.totals?.plans} />
+                  <Metric label="Plans Completed" value={productivity.totals?.completedPlans} tone="green" />
+                  <Metric label="Converted" value={productivity.totals?.convertedPlans} tone="green" />
+                  <Metric label="Pending Actions" value={productivity.totals?.pendingActions} tone="yellow" />
+                  <Metric label="Overdue Follow-ups" value={productivity.totals?.overdueFollowUps} tone="red" />
+                </div>
+
+                <div className="report-list">
+                  {(productivity.byManager || []).map((manager) => (
+                    <div key={manager.key} className="report-row">
+                      <div>
+                        <strong>{manager.name}</strong>
+                        <span>{manager.email || 'Email not available'} | {manager.uniqueSchools || 0} schools covered | Latest {manager.latestActivityDate ? new Date(manager.latestActivityDate).toLocaleDateString('en-IN') : 'No activity'}</span>
+                      </div>
+                      <div className="pm-productivity-metrics">
+                        <span>Reports {manager.reports}</span>
+                        <span>Visits {manager.visits}</span>
+                        <span>Internal {manager.internalReports}</span>
+                        <span>Plans {manager.plans}</span>
+                        <span>Completed {manager.completedPlans}</span>
+                        <span>Converted {manager.convertedPlans}</span>
+                        <span>Actions {manager.pendingActions}</span>
+                        <span>Overdue {manager.overdueFollowUps}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {!productivity.byManager?.length && <div className="empty-state">No PM activity for this period.</div>}
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">Pick a month and load productivity.</div>
+            )}
+          </Panel>
+          )}
+
+          {activeBoard === 'coverage' && (
+          <Panel title="Coverage Gap Report">
+            <div className="scheduler-toolbar">
+              <label className="year-filter">
+                Months
+                <input type="number" min="1" max="120" value={gapMonths} onChange={(e) => setGapMonths(e.target.value)} />
+              </label>
+              <label className="year-filter">
+                State
+                <select value={gapState} onChange={(e) => setGapState(e.target.value)}>
+                  <option value="">All states</option>
+                  {(dashboard.byStateCoverage || []).map((item) => (
+                    <option key={item.state} value={item.state}>
+                      {item.state}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => loadCoverage()}
+                disabled={coverageLoading}
+              >
+                {coverageLoading ? 'Loading...' : 'Load Gaps'}
+              </button>
+              <span className="muted-text">Schools never visited, or not visited within the selected window.</span>
+            </div>
+
+            {coverageLoading ? (
+              <div className="status-text">Loading coverage gaps...</div>
+            ) : coverage ? (
+              <>
+                <div className="dashboard-stats dashboard-stats-compact">
+                  <Metric label="Total Gaps" value={coverage.summary?.totalGaps} tone="red" />
+                  <Metric label="Never Visited" value={coverage.summary?.neverVisited} tone="red" />
+                  <Metric label="Stale" value={coverage.summary?.stale} tone="yellow" />
+                </div>
+
+                <div className="report-list">
+                  {(coverage.gaps || []).slice(0, 200).map((gap) => (
+                    <div key={`${gap.state}-${gap.schoolName}`} className="report-row">
+                      <div>
+                        <strong>{gap.schoolName}</strong>
+                        <span>
+                          {gap.state}
+                          {gap.city ? ` | ${gap.city}` : ''}
+                          {gap.lastVisitDate
+                            ? ` | Last visit ${new Date(gap.lastVisitDate).toLocaleDateString('en-IN')} (${gap.monthsSinceLastVisit} months ago)`
+                            : ' | Never visited'}
+                          {' '}| {gap.totalVisits || 0} total visits
+                        </span>
+                      </div>
+                      <span className={`status-pill ${gap.status === 'Never Visited' ? 'failed' : 'warning'}`}>
+                        {gap.status}
+                      </span>
+                    </div>
+                  ))}
+                  {!coverage.gaps?.length && (
+                    <div className="empty-state">No coverage gaps for this window. Every school was visited within the selected months.</div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">Set the window and load coverage gaps.</div>
+            )}
           </Panel>
           )}
 

@@ -1,12 +1,12 @@
 import { Router } from "express";
-import { buildPlannerDashboardController, createPlanController, listPlansController, sendPlanReminderController, updatePlanController, updatePlanStatusController } from "../controllers/plan.controller.js";
+import { buildPlannerDashboardController, createPlanController, exportPlansController, listPlansController, sendPlanReminderController, updatePlanController, updatePlanStatusController } from "../controllers/plan.controller.js";
 import { requireAdmin, requireUser } from "../middleware/auth.js";
 
 const router = Router();
 
 router.use(requireUser);
-router.post("/", createPlanController);
-router.get("/", listPlansController);
+router.post("/", createPlanController);router.get("/", listPlansController);
+router.get("/export", requireAdmin, exportPlansController);
 router.post("/dashboard-sheet", requireAdmin, buildPlannerDashboardController);
 router.patch("/:id", updatePlanController);
 router.patch("/:id/status", updatePlanStatusController);

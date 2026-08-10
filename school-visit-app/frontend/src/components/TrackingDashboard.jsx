@@ -11,7 +11,7 @@ function addDays(date, days) {
   return next;
 }
 
-export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }) {
+export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin, appSettings }) {
   const today = useMemo(() => new Date(), []);
   const defaultFrom = useMemo(() => formatDateInput(addDays(today, -30)), [today]);
   const defaultTo = useMemo(() => formatDateInput(today), [today]);
@@ -42,10 +42,26 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
   const [viewMode, setViewMode] = useState('cards');
   const [editingReport, setEditingReport] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
+  const [message, setMessage] = useState('');  const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
   const hasSchoolMaster = states.length > 0 && schools.length > 0;
+  const purposeOptions =
+    Array.isArray(appSettings?.visitPurposes) && appSettings.visitPurposes.length
+      ? appSettings.visitPurposes
+      : [
+          'New School Visit / Demo',
+          'Teachers Copy',
+          'Induction Training',
+          'Teachers Training',
+          'Robotics Training',
+          'Admin Related Work',
+          'Software Installation',
+          'Other Works'
+        ];
+  const workModeOptions =
+    Array.isArray(appSettings?.workModes) && appSettings.workModes.length
+      ? appSettings.workModes
+      : ['School Visit', 'Work From Home', 'Work From Office', 'Travel', 'Other'];
 
   const fetchTracking = async (nextFilters, nextViewMode = viewMode, successMessage = '') => {
     setLoading(true);
@@ -425,16 +441,10 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
           <select
             value={filters.purposeOfVisit}
             onChange={(e) => setFilters({ ...filters, purposeOfVisit: e.target.value })}
-          >
-            <option value="">All</option>
-            <option>New School Visit / Demo</option>
-            <option>Teachers Copy</option>
-            <option>Induction Training</option>
-            <option>Teachers Training</option>
-            <option>Robotics Training</option>
-            <option>Admin Related Work</option>
-            <option>Software Installation</option>
-            <option>Other Works</option>
+          >            <option value="">All</option>
+            {purposeOptions.map((purpose) => (
+              <option key={purpose}>{purpose}</option>
+            ))}
           </select>
         </label>
 
@@ -767,13 +777,10 @@ export default function TrackingDashboard({ schoolMaster, currentUser, isAdmin }
                 <textarea rows="4" value={editingReport.actualWorkDone || ''} onChange={(e) => setEditingReport({ ...editingReport, actualWorkDone: e.target.value })} />
               </label>
               <label>
-                Work Mode
-                <select value={editingReport.workMode || 'School Visit'} onChange={(e) => setEditingReport({ ...editingReport, workMode: e.target.value })}>
-                  <option>School Visit</option>
-                  <option>Work From Home</option>
-                  <option>Work From Office</option>
-                  <option>Travel</option>
-                  <option>Other</option>
+                Work Mode                <select value={editingReport.workMode || 'School Visit'} onChange={(e) => setEditingReport({ ...editingReport, workMode: e.target.value })}>
+                  {workModeOptions.map((mode) => (
+                    <option key={mode}>{mode}</option>
+                  ))}
                 </select>
               </label>
               <label>

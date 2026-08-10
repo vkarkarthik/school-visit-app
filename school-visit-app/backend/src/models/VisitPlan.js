@@ -11,19 +11,16 @@ const VisitPlanSchema = new mongoose.Schema(
     course: String,
     programManagerName: { type: String, required: true, index: true },
     programManagerEmail: { type: String, required: true, index: true },
-    purposeOfVisit: { type: String, required: true, index: true },
-    workMode: {
+    purposeOfVisit: { type: String, required: true, index: true },    workMode: {
       type: String,
-      enum: ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"],
       default: "School Visit",
     },
     plannedLocation: String,
-    workPlanned: { type: String, required: true },
-    priorityLevel: {
+    workPlanned: { type: String, required: true },    priorityLevel: {
       type: String,
-      enum: ["Critical", "High", "Normal"],
       default: "Normal",
     },
+
     dailyStatus: {
       type: String,
       enum: ["Planned", "In Progress", "Closed", "Blocked"],
