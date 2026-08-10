@@ -3,6 +3,18 @@ import { AppSettings } from "../models/AppSettings.js";
 
 const SETTINGS_CACHE_TTL_MS = 5 * 60 * 1000;
 const SETTINGS_KEY = "global";
+const DEFAULT_WORK_MODES = ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"];
+const DEFAULT_VISIT_PURPOSES = [
+  "New School Visit / Demo",
+  "Teachers Copy",
+  "Induction Training",
+  "Teachers Training",
+  "Robotics Training",
+  "Admin Related Work",
+  "Software Installation",
+  "Other Works",
+];
+const DEFAULT_PRIORITIES = ["Critical", "High", "Normal"];
 const DEFAULT_ADMIN_EMAILS = [
   "karthik@superteacher.in",
   "karthikv@superteacher.in",
@@ -22,6 +34,20 @@ let settingsCache = {
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeStringList(values) {
+  const seen = new Set();
+  const list = [];
+
+  for (const rawItem of Array.isArray(values) ? values : String(values || "").split(/[\n,]/)) {
+    const item = String(rawItem || "").trim();
+    if (!item || seen.has(item)) continue;
+    seen.add(item);
+    list.push(item);
+  }
+
+  return list;
 }
 
 function normalizeEmailList(values) {
@@ -53,13 +79,14 @@ function normalizeProgramManagers(values) {
   }
 
   return list.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function buildDefaultSettings() {
+}function buildDefaultSettings() {
   return {
     adminEmails: normalizeEmailList(DEFAULT_ADMIN_EMAILS),
     commonCc: normalizeEmailList(env.smtp.cc),
     programManagers: [],
+    workModes: normalizeStringList(DEFAULT_WORK_MODES),
+    visitPurposes: normalizeStringList(DEFAULT_VISIT_PURPOSES),
+    priorities: normalizeStringList(DEFAULT_PRIORITIES),
     updatedBy: "",
     updatedAt: null,
   };
@@ -71,8 +98,10 @@ function normalizeSettingsDocument(doc) {
 
   return {
     adminEmails: normalizeEmailList(source.adminEmails?.length ? source.adminEmails : defaults.adminEmails),
-    commonCc: normalizeEmailList(source.commonCc?.length ? source.commonCc : defaults.commonCc),
-    programManagers: normalizeProgramManagers(source.programManagers || defaults.programManagers),
+    commonCc: normalizeEmailList(source.commonCc?.length ? source.commonCc : defaults.commonCc),    programManagers: normalizeProgramManagers(source.programManagers || defaults.programManagers),
+    workModes: normalizeStringList(source.workModes?.length ? source.workModes : defaults.workModes),
+    visitPurposes: normalizeStringList(source.visitPurposes?.length ? source.visitPurposes : defaults.visitPurposes),
+    priorities: normalizeStringList(source.priorities?.length ? source.priorities : defaults.priorities),
     updatedBy: normalizeEmail(source.updatedBy),
     updatedAt: source.updatedAt || null,
   };
@@ -107,8 +136,10 @@ export async function saveAppSettings(payload, updatedBy = "") {
   const next = {
     key: SETTINGS_KEY,
     adminEmails: normalizeEmailList(payload?.adminEmails),
-    commonCc: normalizeEmailList(payload?.commonCc),
-    programManagers: normalizeProgramManagers(payload?.programManagers),
+    commonCc: normalizeEmailList(payload?.commonCc),    programManagers: normalizeProgramManagers(payload?.programManagers),
+    workModes: normalizeStringList(payload?.workModes),
+    visitPurposes: normalizeStringList(payload?.visitPurposes),
+    priorities: normalizeStringList(payload?.priorities),
     updatedBy: normalizeEmail(updatedBy),
   };
 

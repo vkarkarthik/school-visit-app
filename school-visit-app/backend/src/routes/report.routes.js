@@ -1,6 +1,8 @@
-import { Router } from 'express';
-import {
+import { Router } from 'express';import {
   createReportController,
+  exportReportsController,
+  getCoverageGapsController,
+  getProductivityController,
   getReportsDashboardController,
   getReportPdfController,
   getSchoolTimelineController,
@@ -13,10 +15,11 @@ import {
 } from '../controllers/report.controller.js';
 import { requireAdmin, requireUser } from '../middleware/auth.js';
 
-const router = Router();
-
-router.post('/', upload.array('photos', 10), createReportController);
+const router = Router();router.post('/', upload.array('photos', 10), createReportController);
 router.post('/preview-pdf', previewReportPdfController);
+router.get('/export', requireAdmin, exportReportsController);
+router.get('/productivity', requireAdmin, getProductivityController);
+router.get('/coverage-gaps', requireAdmin, getCoverageGapsController);
 router.get('/:id/pdf', requireAdmin, getReportPdfController);
 router.get('/dashboard', requireAdmin, getReportsDashboardController);
 router.get('/tracking', requireUser, getSchoolTrackingController);

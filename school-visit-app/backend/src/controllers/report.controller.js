@@ -10,7 +10,7 @@ import { AppError } from "../utils/appError.js";
 import { generatePdfBuffer } from "../services/pdf.service.js";
 import { sendFollowUpReminderEmail, sendVisitReportEmail } from "../services/email.service.js";
 import { appendNewSchoolToSheet, appendPlanLogToSheet, getSchoolMaster, isPlannerSheetQuotaError, schedulePlannerDashboardRefresh } from "../services/sheets.service.js";
-import { getAdminEmailSet } from "../services/settings.service.js";
+import { getAdminEmailSet, getAppSettings } from "../services/settings.service.js";
 import { VisitReport } from "../models/VisitReport.js";
 import { VisitPlan } from "../models/VisitPlan.js";
 import { buildReportHtml } from "../utils/htmlReportTemplate.js";
@@ -26,12 +26,9 @@ function parseEmailList(value) {
     .split(",")
     .map((email) => email.trim())
     .filter(Boolean);
-}
-
-function normalizeWorkMode(value) {
-  return ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"].includes(value)
-    ? value
-    : "School Visit";
+}function normalizeWorkMode(value) {
+  const normalized = String(value || "").trim();
+  return normalized || "School Visit";
 }
 
 function normalizeManagerKey(email, name) {
@@ -333,11 +330,8 @@ export const createReportController = asyncHandler(async (req, res) => {
     console.log("STEP 7 DONE: Report saved");
 
     if (sourcePlanId) {
-      const updatedPlan = await VisitPlan.findByIdAndUpdate(sourcePlanId, {
-        status: "Completed",
-        workMode: ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"].includes(workMode)
-          ? workMode
-          : "School Visit",
+      const updatedPlan = await VisitPlan.findByIdAndUpdate(sourcePlanId, {        status: "Completed",
+        workMode: normalizedWorkMode,
         actualLocation,
         actualWorkDone,
         convertedReportId: report._id,
@@ -481,6 +475,7 @@ export const getSchoolTrackingController = asyncHandler(async (req, res) => {
 
 export const getReportsDashboardController = asyncHandler(async (req, res) => {
   const adminEmailSet = await getAdminEmailSet();
+  const appSettings = await getAppSettings();
   const isAdminEmail = (value) => adminEmailSet.has(String(value || "").trim().toLowerCase());
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -518,6 +513,59 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
   const allManagerMap = new Map();
   const workModeMap = new Map();
   const stateCoverageMap = new Map();
+
+  for (const manager of appSettings?.programManagers || []) {
+    const managerEmail = String(manager.email || "").trim().toLowerCase();
+    const managerName = String(manager.name || "").trim() || "Unknown PM";
+    if (!managerEmail || manager.active === false || isAdminEmail(managerEmail)) continue;
+
+    const managerKey = normalizeManagerKey(managerEmail, managerName);
+    if (!allManagerMap.has(managerKey)) {
+      allManagerMap.set(managerKey, {
+        key: managerKey,
+        name: managerName,
+        email: managerEmail,
+      });
+    }
+
+    if (!managerMap.has(managerKey)) {
+      managerMap.set(managerKey, {
+        key: managerKey,
+        name: managerName,
+        email: managerEmail,
+        count: 0,
+        sentReports: 0,
+        failedReports: 0,
+        uniqueSchools: new Set(),
+        pendingActions: 0,
+        upcomingFollowUps: 0,
+        latestVisitDate: null,
+      });
+    }
+
+    if (!planManagerMap.has(managerKey)) {
+      planManagerMap.set(managerKey, {
+        key: managerKey,
+        name: managerName,
+        email: managerEmail,
+        total: 0,
+        draft: 0,
+        confirmed: 0,
+        completed: 0,
+        cancelled: 0,
+        planned: 0,
+        inProgress: 0,
+        closed: 0,
+        blocked: 0,
+        field: 0,
+        internal: 0,
+        todayPlans: 0,
+        todayClosed: 0,
+        overdueOpen: 0,
+        openPlans: 0,
+      });
+    }
+  }
 
   for (const school of schoolMaster?.schools || []) {
     const stateName = String(school.state || "").trim();
@@ -628,7 +676,7 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
     }
 
     purposeMap.set(report.purposeOfVisit, (purposeMap.get(report.purposeOfVisit) || 0) + 1);
-    const rosterManagerKey = report.programManagerEmail || report.programManagerName || "Unknown PM";
+    const rosterManagerKey = normalizeManagerKey(report.programManagerEmail, report.programManagerName);
     if (!allManagerMap.has(rosterManagerKey)) {
       allManagerMap.set(rosterManagerKey, {
         key: rosterManagerKey,
@@ -642,7 +690,7 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
     planStatusMap.set(plan.status, (planStatusMap.get(plan.status) || 0) + 1);
     workModeMap.set(plan.workMode || "School Visit", (workModeMap.get(plan.workMode || "School Visit") || 0) + 1);
 
-    const managerKey = plan.programManagerEmail || plan.programManagerName || "Unknown PM";
+    const managerKey = normalizeManagerKey(plan.programManagerEmail, plan.programManagerName);
     if (!allManagerMap.has(managerKey)) {
       allManagerMap.set(managerKey, {
         key: managerKey,
@@ -768,7 +816,7 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
       pendingNewSchools: reports.filter((r) => r.newSchoolApprovalStatus === "Pending").length,
       sheetSyncFailed: reports.filter((r) => r.newSchoolSheetStatus === "Failed").length,
       uniqueSchools: new Set(reports.map((r) => `${r.state}__${r.schoolName}`)).size,
-      activeManagers: new Set(reports.map((r) => r.programManagerEmail || r.programManagerName)).size,
+      activeManagers: [...allManagerMap.values()].filter((manager) => !isAdminEmail(manager.email)).length,
       plannedVisits: plans.length,
       convertedPlans: plans.filter((plan) => plan.convertedReportId).length,
       pendingActionItems: pendingActionItems.length,
@@ -911,6 +959,372 @@ export const getReportsDashboardController = asyncHandler(async (req, res) => {
         return ["Draft", "Confirmed"].includes(plan.status) && plannedDate >= todayStart && plannedDate < nextMonthEnd;
       }).length,
     },
+  });
+});
+
+function buildReportsCsv(reports) {
+  const headers = [
+    "Visit Date",
+    "State",
+    "School",
+    "School Type",
+    "City",
+    "Point of Contact",
+    "Designation",
+    "Contact No",
+    "School Email",
+    "Course",
+    "PM Name",
+    "PM Email",
+    "CC Emails",
+    "Purpose",
+    "Work Mode",
+    "Actual Location",
+    "Actual Work Done",
+    "Session Summary",
+    "Action Items",
+    "Next Visit Date",
+    "Remarks",
+    "Email Status",
+    "Report Status",
+    "New School Status",
+    "Sales Lead Status",
+    "Photos",
+    "PDF URL",
+    "Created At",
+  ];
+
+  const rows = reports.map((report) => [
+    report.visitDate ? new Date(report.visitDate).toISOString().slice(0, 10) : "",
+    report.state || "",
+    report.schoolName || "",
+    report.isNewSchool ? "New / Prospect" : "Existing",
+    report.city || "",
+    report.pointOfContact || "",
+    report.designation || "",
+    report.contactNo || "",
+    report.schoolEmail || "",
+    report.course || "",
+    report.programManagerName || "",
+    report.programManagerEmail || "",
+    report.ccEmails || "",
+    report.purposeOfVisit || "",
+    report.workMode || "",
+    report.actualLocation || "",
+    report.actualWorkDone || "",
+    report.sessionSummary || "",
+    report.actionItems || "",
+    report.nextVisitDate ? new Date(report.nextVisitDate).toISOString().slice(0, 10) : "",
+    report.remarks || "",
+    report.emailStatus || "",
+    report.reportStatus || "",
+    report.newSchoolApprovalStatus || "",
+    report.salesLeadStatus || "",
+    Array.isArray(report.photos) ? report.photos.length : 0,
+    report.pdfUrl || "",
+    report.createdAt ? new Date(report.createdAt).toISOString().slice(0, 10) : "",
+  ]);
+
+  return `\uFEFF${[headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n")}`;
+}
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function buildReportExportFilter(query) {
+  const filter = {};
+
+  if (query.state) filter.state = query.state;
+  if (query.schoolName) filter.schoolName = query.schoolName;
+  if (query.year) filter.year = Number(query.year);
+  if (query.emailStatus) filter.emailStatus = query.emailStatus;
+  if (query.purposeOfVisit) filter.purposeOfVisit = query.purposeOfVisit;
+  if (query.workMode) filter.workMode = query.workMode;
+  if (query.newSchoolApprovalStatus) filter.newSchoolApprovalStatus = query.newSchoolApprovalStatus;
+  if (query.salesLeadStatus) filter.salesLeadStatus = query.salesLeadStatus;
+  if (query.isNewSchool === "true") filter.isNewSchool = true;
+  if (query.isNewSchool === "false") filter.isNewSchool = false;
+  if (query.programManagerEmail) filter.programManagerEmail = String(query.programManagerEmail).trim().toLowerCase();
+  if (query.programManagerName) filter.programManagerName = new RegExp(String(query.programManagerName).trim(), "i");
+  if (query.dateFrom || query.dateTo) filter.visitDate = parseDateRange(query);
+
+  return filter;
+}
+
+function setCsvDownloadHeaders(res, filename) {
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+}
+
+function parseDateRange(query) {
+  const range = {};
+  if (query.dateFrom) range.$gte = new Date(query.dateFrom);
+  if (query.dateTo) {
+    const end = new Date(query.dateTo);
+    end.setHours(23, 59, 59, 999);
+    range.$lte = end;
+  }
+  return range;
+}
+
+function buildPeriodRange(query, now = new Date()) {
+  if (query.month && /^\d{4}-\d{2}$/.test(query.month)) {
+    const [year, month] = query.month.split("-").map(Number);
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 1);
+    return {
+      start,
+      end,
+      label: `${year}-${String(month).padStart(2, "0")}`,
+    };
+  }
+
+  const year = Number(query.year || now.getFullYear());
+  return {
+    start: new Date(year, 0, 1),
+    end: new Date(year + 1, 0, 1),
+    label: String(year),
+  };
+}
+
+function normalizeManagerKeyForAggregation(email, name) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (normalizedEmail) return normalizedEmail;
+  return String(name || "Unknown PM").trim().toLowerCase().replace(/\s+/g, " ");
+}
+export const exportReportsController = asyncHandler(async (req, res) => {
+  const filter = buildReportExportFilter(req.query);
+  const reports = await VisitReport.find(filter).sort({ visitDate: -1, createdAt: -1 }).lean();
+
+  setCsvDownloadHeaders(res, `reports-export-${new Date().toISOString().slice(0, 10)}.csv`);
+  res.send(buildReportsCsv(reports));
+});
+
+export const getProductivityController = asyncHandler(async (req, res) => {
+  const appSettings = await getAppSettings();
+  const adminEmailSet = await getAdminEmailSet();
+  const isAdminEmail = (value) => adminEmailSet.has(String(value || "").trim().toLowerCase());
+  const now = new Date();
+  const { start, end, label } = buildPeriodRange(req.query, now);
+  const overdueNow = now;
+
+  const [reports, plans] = await Promise.all([
+    VisitReport.find({ visitDate: { $gte: start, $lt: end } }).lean(),
+    VisitPlan.find({ plannedDate: { $gte: start, $lt: end } }).lean(),
+  ]);
+
+  const managerMap = new Map();
+
+  const addManager = (email, name) => {
+    const key = normalizeManagerKeyForAggregation(email, name);
+    if (!managerMap.has(key)) {
+      managerMap.set(key, {
+        key,
+        name: String(name || "Unknown PM").trim() || "Unknown PM",
+        email: String(email || "").trim().toLowerCase(),
+        reports: 0,
+        sentReports: 0,
+        failedReports: 0,
+        visits: 0,
+        internalReports: 0,
+        uniqueSchools: new Set(),
+        pendingActions: 0,
+        overdueFollowUps: 0,
+        plans: 0,
+        completedPlans: 0,
+        confirmedPlans: 0,
+        cancelledPlans: 0,
+        convertedPlans: 0,
+        dayClosed: 0,
+        dayBlocked: 0,
+        fieldPlans: 0,
+        internalPlans: 0,
+        latestActivityDate: null,
+      });
+    }
+    return managerMap.get(key);
+  };
+
+  for (const manager of appSettings?.programManagers || []) {
+    const email = String(manager.email || "").trim().toLowerCase();
+    const name = String(manager.name || "").trim();
+    if (!email || !name || manager.active === false || isAdminEmail(email)) continue;
+    addManager(email, name);
+  }
+
+  for (const report of reports) {
+    const entry = addManager(report.programManagerEmail, report.programManagerName);
+    entry.reports += 1;
+    if (report.emailStatus === "Sent") entry.sentReports += 1;
+    if (report.emailStatus === "Failed") entry.failedReports += 1;
+    if (report.workMode === "School Visit") entry.visits += 1;
+    if (report.workMode !== "School Visit") entry.internalReports += 1;
+    entry.uniqueSchools.add(`${report.state || "Unknown"}__${report.schoolName || "Unknown School"}`);
+    entry.pendingActions += (report.actionItemsDetailed || []).filter((item) => item.status !== "Completed").length;
+    if (report.nextVisitDate && new Date(report.nextVisitDate) < overdueNow) entry.overdueFollowUps += 1;
+    if (!entry.latestActivityDate || new Date(report.visitDate) > new Date(entry.latestActivityDate)) {
+      entry.latestActivityDate = report.visitDate;
+    }
+  }
+
+  for (const plan of plans) {
+    const entry = addManager(plan.programManagerEmail, plan.programManagerName);
+    entry.plans += 1;
+    if (plan.status === "Completed") entry.completedPlans += 1;
+    if (plan.status === "Confirmed") entry.confirmedPlans += 1;
+    if (plan.status === "Cancelled") entry.cancelledPlans += 1;
+    if (plan.convertedReportId) entry.convertedPlans += 1;
+    if (plan.dailyStatus === "Closed") entry.dayClosed += 1;
+    if (plan.dailyStatus === "Blocked") entry.dayBlocked += 1;
+    if (plan.workMode === "School Visit") entry.fieldPlans += 1;
+    if (plan.workMode !== "School Visit") entry.internalPlans += 1;
+    if (!entry.latestActivityDate || new Date(plan.plannedDate) > new Date(entry.latestActivityDate)) {
+      entry.latestActivityDate = plan.plannedDate;
+    }
+  }
+
+  const byManager = [...managerMap.values()]
+    .map((entry) => ({
+      ...entry,
+      uniqueSchools: entry.uniqueSchools.size,
+    }))
+    .sort((a, b) => b.reports + b.plans - (a.reports + a.plans) || b.reports - a.reports || a.name.localeCompare(b.name));
+
+  const totals = byManager.reduce(
+    (acc, entry) => ({
+      reports: acc.reports + entry.reports,
+      sentReports: acc.sentReports + entry.sentReports,
+      failedReports: acc.failedReports + entry.failedReports,
+      visits: acc.visits + entry.visits,
+      internalReports: acc.internalReports + entry.internalReports,
+      uniqueSchools: acc.uniqueSchools + entry.uniqueSchools,
+      pendingActions: acc.pendingActions + entry.pendingActions,
+      overdueFollowUps: acc.overdueFollowUps + entry.overdueFollowUps,
+      plans: acc.plans + entry.plans,
+      completedPlans: acc.completedPlans + entry.completedPlans,
+      confirmedPlans: acc.confirmedPlans + entry.confirmedPlans,
+      cancelledPlans: acc.cancelledPlans + entry.cancelledPlans,
+      convertedPlans: acc.convertedPlans + entry.convertedPlans,
+      dayClosed: acc.dayClosed + entry.dayClosed,
+      dayBlocked: acc.dayBlocked + entry.dayBlocked,
+      fieldPlans: acc.fieldPlans + entry.fieldPlans,
+      internalPlans: acc.internalPlans + entry.internalPlans,
+    }),
+    {
+      reports: 0,
+      sentReports: 0,
+      failedReports: 0,
+      visits: 0,
+      internalReports: 0,
+      uniqueSchools: 0,
+      pendingActions: 0,
+      overdueFollowUps: 0,
+      plans: 0,
+      completedPlans: 0,
+      confirmedPlans: 0,
+      cancelledPlans: 0,
+      convertedPlans: 0,
+      dayClosed: 0,
+      dayBlocked: 0,
+      fieldPlans: 0,
+      internalPlans: 0,
+    }
+  );
+
+  res.json({
+    success: true,
+    range: { from: start, to: end, label },
+    byManager,
+    totals,
+  });
+});
+
+export const getCoverageGapsController = asyncHandler(async (req, res) => {
+  const months = Math.max(1, Math.min(120, Number(req.query.months || 12) || 12));
+  const stateFilter = String(req.query.state || "").trim();
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+
+  const schoolMaster = await getSchoolMaster().catch(() => ({ states: [], schools: [] }));
+  const masterSchools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
+  const oldestRelevant = new Date();
+  oldestRelevant.setFullYear(oldestRelevant.getFullYear() - 10);
+
+  const reports = await VisitReport.find(
+    { visitDate: { $gte: oldestRelevant } },
+    { state: 1, schoolName: 1, visitDate: 1, city: 1, _id: 0 }
+  ).lean();
+
+  const lastVisitBySchool = new Map();
+  for (const report of reports) {
+    const key = `${String(report.state || "").trim().toLowerCase()}__${String(report.schoolName || "").trim().toLowerCase()}`;
+    if (key.endsWith("__")) continue;
+    const entry = lastVisitBySchool.get(key) || { lastVisitDate: null, totalVisits: 0 };
+    entry.totalVisits += 1;
+    if (report.visitDate && (!entry.lastVisitDate || new Date(report.visitDate) > new Date(entry.lastVisitDate))) {
+      entry.lastVisitDate = report.visitDate;
+    }
+    lastVisitBySchool.set(key, entry);
+  }
+
+  const gaps = [];
+  const stateCounts = new Map();
+  const monthMs = 1000 * 60 * 60 * 24 * 30.44;
+
+  for (const school of masterSchools) {
+    const stateName = String(school.state || "").trim();
+    const schoolName = String(school.schoolName || "").trim();
+    if (!stateName || !schoolName) continue;
+    if (stateFilter && stateName.toLowerCase() !== stateFilter.toLowerCase()) continue;
+
+    const key = `${stateName.toLowerCase()}__${schoolName.toLowerCase()}`;
+    const visit = lastVisitBySchool.get(key);
+    const lastVisitDate = visit?.lastVisitDate || null;
+    const isGap = !lastVisitDate || new Date(lastVisitDate) < cutoff;
+
+    if (!isGap) continue;
+
+    const monthsSince = lastVisitDate
+      ? Math.max(1, Math.floor((Date.now() - new Date(lastVisitDate).getTime()) / monthMs))
+      : null;
+    const stateEntry = stateCounts.get(stateName) || { neverVisited: 0, stale: 0 };
+    if (!lastVisitDate) stateEntry.neverVisited += 1;
+    else stateEntry.stale += 1;
+    stateCounts.set(stateName, stateEntry);
+
+    gaps.push({
+      state: stateName,
+      schoolName,
+      city: String(school.city || "").trim(),
+      lastVisitDate,
+      totalVisits: visit?.totalVisits || 0,
+      monthsSinceLastVisit: monthsSince,
+      status: lastVisitDate ? "Stale" : "Never Visited",
+    });
+  }
+
+  gaps.sort((a, b) => {
+    if (a.status !== b.status) return a.status === "Never Visited" ? -1 : 1;
+    return (b.monthsSinceLastVisit ?? 9999) - (a.monthsSinceLastVisit ?? 9999) || a.schoolName.localeCompare(b.schoolName);
+  });
+
+  const byState = [...stateCounts.entries()]
+    .map(([state, counts]) => ({ state, ...counts, total: counts.neverVisited + counts.stale }))
+    .sort((a, b) => b.total - a.total);
+
+  res.json({
+    success: true,
+    months,
+    cutoffDate: cutoff,
+    summary: {
+      totalGaps: gaps.length,
+      neverVisited: gaps.filter((gap) => gap.status === "Never Visited").length,
+      stale: gaps.filter((gap) => gap.status === "Stale").length,
+    },
+    byState,
+    gaps: gaps.slice(0, 1000),
   });
 });
 

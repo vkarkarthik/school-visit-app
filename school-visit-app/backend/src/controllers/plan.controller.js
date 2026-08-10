@@ -6,16 +6,14 @@ import { sendPlanReminderEmail } from "../services/email.service.js";
 
 function validateEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ""));
-}
-
-function normalizeWorkMode(value) {
-  return ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"].includes(value)
-    ? value
-    : "School Visit";
+}function normalizeWorkMode(value) {
+  const normalized = String(value || "").trim();
+  return normalized || "School Visit";
 }
 
 function normalizePriorityLevel(value) {
-  return ["Critical", "High", "Normal"].includes(value) ? value : "Normal";
+  const normalized = String(value || "").trim();
+  return normalized || "Normal";
 }
 
 function normalizeDailyStatus(value) {
@@ -218,6 +216,127 @@ export const listPlansController = asyncHandler(async (req, res) => {
   });
 });
 
+function csvEscape(value) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function buildPlansCsv(plans) {
+  const headers = [
+    "Planned Date",
+    "State",
+    "School",
+    "City",
+    "Point of Contact",
+    "Contact No",
+    "School Email",
+    "Course",
+    "PM Name",
+    "PM Email",
+    "Purpose",
+    "Work Mode",
+    "Priority",
+    "Status",
+    "Day Status",
+    "Start Time",
+    "End Time",
+    "Planned Location",
+    "Work Planned",
+    "Planning Notes",
+    "Blockers",
+    "Actual Location",
+    "Actual Work Done",
+    "Closure Notes",
+    "Converted",
+    "Planner Sheet Status",
+    "Reminder Status",
+    "Created At",
+  ];
+
+  const rows = plans.map((plan) => [
+    plan.plannedDate ? new Date(plan.plannedDate).toISOString().slice(0, 10) : "",
+    plan.state || "",
+    plan.schoolName || "",
+    plan.city || "",
+    plan.pointOfContact || "",
+    plan.contactNo || "",
+    plan.schoolEmail || "",
+    plan.course || "",
+    plan.programManagerName || "",
+    plan.programManagerEmail || "",
+    plan.purposeOfVisit || "",
+    plan.workMode || "",
+    plan.priorityLevel || "",
+    plan.status || "",
+    plan.dailyStatus || "",
+    plan.plannedStartTime || "",
+    plan.plannedEndTime || "",
+    plan.plannedLocation || "",
+    plan.workPlanned || "",
+    plan.planningNotes || "",
+    plan.blockers || "",
+    plan.actualLocation || "",
+    plan.actualWorkDone || "",
+    plan.closureNotes || "",
+    plan.convertedReportId ? "Yes" : "No",
+    plan.plannerSheetStatus || "",
+    plan.notificationStatus || "",
+    plan.createdAt ? new Date(plan.createdAt).toISOString().slice(0, 10) : "",
+  ]);
+
+  return `\uFEFF${[headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n")}`;
+}
+
+function buildPlanExportFilter(query) {
+  const filter = {};
+
+  if (query.status) filter.status = query.status;
+  if (query.dailyStatus) filter.dailyStatus = query.dailyStatus;
+  if (query.state) filter.state = query.state;
+  if (query.programManagerEmail) filter.programManagerEmail = String(query.programManagerEmail).trim().toLowerCase();
+  if (query.purposeOfVisit) filter.purposeOfVisit = query.purposeOfVisit;
+  if (query.workMode) filter.workMode = query.workMode;
+
+  const exportYear = Number(query.year || 0);
+  if (exportYear > 0) {
+    filter.plannedDate = { $gte: new Date(exportYear, 0, 1), $lt: new Date(exportYear + 1, 0, 1) };
+  }
+
+  if (query.dateFrom || query.dateTo) {
+    filter.plannedDate = filter.plannedDate || {};
+    if (query.dateFrom) filter.plannedDate.$gte = new Date(query.dateFrom);
+    if (query.dateTo) {
+      const end = new Date(query.dateTo);
+      end.setHours(23, 59, 59, 999);
+      filter.plannedDate.$lte = end;
+    }
+  }
+
+  return filter;
+}
+
+function setCsvDownloadHeaders(res, filename) {
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+}
+
+function parseDateRange(query) {
+  const range = {};
+  if (query.dateFrom) range.$gte = new Date(query.dateFrom);
+  if (query.dateTo) {
+    const end = new Date(query.dateTo);
+    end.setHours(23, 59, 59, 999);
+    range.$lte = end;
+  }
+  return range;
+}
+export const exportPlansController = asyncHandler(async (req, res) => {
+  const filter = buildPlanExportFilter(req.query);
+  const plans = await VisitPlan.find(filter).sort({ plannedDate: 1, createdAt: -1 }).lean();
+
+  setCsvDownloadHeaders(res, `plans-export-${new Date().toISOString().slice(0, 10)}.csv`);
+  res.send(buildPlansCsv(plans));
+});
 export const updatePlanController = asyncHandler(async (req, res) => {
   const filter = req.isAdmin ? { _id: req.params.id } : { _id: req.params.id, programManagerEmail: req.userEmail };
   const plan = await VisitPlan.findOne(filter);

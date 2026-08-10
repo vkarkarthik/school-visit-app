@@ -139,7 +139,7 @@ const emptyForm = (currentUser = {}) => ({
   remarks: ''
 });
 
-export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad, planToConvert, onDraftLoaded, onPlanLoaded, onReportCreated }) {
+export default function SchoolVisitForm({ schoolMaster, currentUser, appSettings, draftToLoad, planToConvert, onDraftLoaded, onPlanLoaded, onReportCreated }) {
   const [form, setForm] = useState(() => {
     try {
       const saved = localStorage.getItem('schoolVisitDraft');
@@ -163,18 +163,28 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
   const [previewOpen, setPreviewOpen] = useState(false);
   const [successReport, setSuccessReport] = useState(null);
   const [pdfPreviewing, setPdfPreviewing] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
-  const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
+  const [currentStep, setCurrentStep] = useState(1);  const schools = Array.isArray(schoolMaster?.schools) ? schoolMaster.schools : [];
   const states = Array.isArray(schoolMaster?.states) ? schoolMaster.states : [];
   const hasSchoolMaster = states.length > 0 && schools.length > 0;
   const isNewSchool = form.isNewSchool === 'true';
   const isSchoolVisitMode = form.workMode === 'School Visit';
   const purposeGuide = PURPOSE_GUIDES[form.purposeOfVisit];
+  const purposes =
+    Array.isArray(appSettings?.visitPurposes) && appSettings.visitPurposes.length
+      ? appSettings.visitPurposes
+      : PURPOSES;
+  const configuredWorkModes =
+    Array.isArray(appSettings?.workModes) && appSettings.workModes.length
+      ? appSettings.workModes
+      : ['School Visit', 'Work From Home', 'Work From Office', 'Travel', 'Other'];
+  const workModes = configuredWorkModes.includes('School Visit')
+    ? configuredWorkModes
+    : ['School Visit', ...configuredWorkModes];
   const generatedCopy = useMemo(
     () => generateVisitCopy(form.purposeOfVisit, form.guidedDetails || {}, form),
     [form.purposeOfVisit, form.guidedDetails, form.schoolName, form.course, form.nextVisitDate]
   );
-  const useManualReportText = form.manualReportText === 'true';
+  const useManualReportText = form.manualReportText === 'true' || !purposeGuide;
   const effectiveSessionSummary = useManualReportText ? form.sessionSummary : generatedCopy.sessionSummary;
   const effectiveActionItems = useManualReportText ? form.actionItems : generatedCopy.actionItems;
 
@@ -733,8 +743,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
             <label>
               {isSchoolVisitMode ? 'Purpose of Visit' : 'Work Category'}
               <select name="purposeOfVisit" value={form.purposeOfVisit} onChange={handleChange} required>
-                <option value="">Select purpose</option>
-                {PURPOSES.map((purpose) => (
+                <option value="">Select purpose</option>                {purposes.map((purpose) => (
                   <option key={purpose} value={purpose}>
                     {purpose}
                   </option>
@@ -750,13 +759,12 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
             </label>
 
             <label>
-              Work Mode
-              <select name="workMode" value={form.workMode} onChange={handleChange}>
-                <option>School Visit</option>
-                <option>Work From Home</option>
-                <option>Work From Office</option>
-                <option>Travel</option>
-                <option>Other</option>
+              Work Mode              <select name="workMode" value={form.workMode} onChange={handleChange}>
+                {workModes.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -781,10 +789,9 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
                 required
               />
               {renderError('actualWorkDone')}
-            </label>
-
-            {purposeGuide && (
+            </label>            {(purposeGuide || useManualReportText) && (
               <div className="full-width guided-builder">
+                {purposeGuide && (
                 <div className="template-toolbar">
                   <span>Fill quick points. The app will create the detailed report automatically.</span>
                   <button
@@ -801,8 +808,9 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
                     {useManualReportText ? 'Use auto report' : 'Edit generated text'}
                   </button>
                 </div>
+                )}
 
-                {!useManualReportText && (
+                {!useManualReportText && purposeGuide && (
                   <>
                     <div className="form-grid">
                       {purposeGuide.fields.map(([key, label, placeholder], index) => (
@@ -854,8 +862,7 @@ export default function SchoolVisitForm({ schoolMaster, currentUser, draftToLoad
                       {renderError('actionItems')}
                     </label>
                   </div>
-                )}
-              </div>
+                )}              </div>
             )}
 
             <label>

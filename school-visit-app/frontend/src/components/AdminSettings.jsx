@@ -1,7 +1,31 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api/client';
+import { api } from '../api/client';const emptyManager = { name: '', email: '', active: true };
 
-const emptyManager = { name: '', email: '', active: true };
+function listToText(values) {
+  return (values || []).join('\n');
+}
+
+function textToList(text, { keepSchoolVisit = false } = {}) {
+  const list = String(text || '')
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const seen = new Set();
+  const unique = [];
+  for (const item of list) {
+    if (seen.has(item)) continue;
+    seen.add(item);
+    unique.push(item);
+  }
+
+  if (keepSchoolVisit && !unique.includes('School Visit')) {
+    unique.unshift('School Visit');
+  }
+
+  return unique;
+}
+
 
 export default function AdminSettings({ settings, onSaveSettings, savingSettings }) {
   const [draft, setDraft] = useState(settings);
@@ -143,6 +167,48 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
           {!draft.programManagers?.length && (
             <div className="empty-state">No PM roster saved yet. Add your first program manager here.</div>
           )}
+        </div>
+      </div>
+
+      <div className="panel-subsection">
+        <div className="panel-header compact-panel-header">
+          <div>
+            <span className="eyebrow">Dropdown options</span>
+            <h3>Work modes, visit purposes, and priorities</h3>
+          </div>
+        </div>
+        <p className="help-text">One option per line. These drive the dropdowns in the planner, report form, and filters. "School Visit" is always kept as a core mode and cannot be removed.</p>
+
+        <div className="form-grid">
+          <label>
+            Work Modes
+            <textarea
+              rows={6}
+              value={listToText(draft.workModes)}
+              onChange={(e) => setDraft((prev) => ({ ...prev, workModes: textToList(e.target.value, { keepSchoolVisit: true }) }))}
+              placeholder="School Visit\nWork From Home\nWork From Office\nTravel\nOther"
+            />
+          </label>
+
+          <label>
+            Visit Purposes
+            <textarea
+              rows={8}
+              value={listToText(draft.visitPurposes)}
+              onChange={(e) => setDraft((prev) => ({ ...prev, visitPurposes: textToList(e.target.value) }))}
+              placeholder="New School Visit / Demo\nTeachers Training\nOther Works"
+            />
+          </label>
+
+          <label>
+            Priorities
+            <textarea
+              rows={4}
+              value={listToText(draft.priorities)}
+              onChange={(e) => setDraft((prev) => ({ ...prev, priorities: textToList(e.target.value) }))}
+              placeholder="Critical\nHigh\nNormal"
+            />
+          </label>
         </div>
       </div>
 

@@ -41,12 +41,11 @@ const VisitReportSchema = new mongoose.Schema(
     ccEmails: String,
     purposeOfVisit: { type: String, required: true },
     visitDate: { type: Date, required: true, index: true },
-    sourcePlanId: { type: mongoose.Schema.Types.ObjectId, ref: "VisitPlan", index: true },
-    workMode: {
+    sourcePlanId: { type: mongoose.Schema.Types.ObjectId, ref: "VisitPlan", index: true },    workMode: {
       type: String,
-      enum: ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"],
       default: "School Visit",
     },
+
     actualLocation: String,
     actualWorkDone: { type: String, required: true },
     sessionSummary: { type: String, required: true },
