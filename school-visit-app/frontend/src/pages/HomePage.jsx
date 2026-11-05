@@ -23,6 +23,7 @@ const DEFAULT_APP_SETTINGS = {
     'marichelvam@superteacher.in',
     'sukumar@superteacher.in'
   ],  commonCc: ['vasudevan@superteacher.in', 'bhanu@superteacher.in', 'manmohan@superteacher.in', 'jayasri@superteacher.co.in'],
+  stateCcEmails: {},
   programManagers: [],
   workModes: ['School Visit', 'Work From Home', 'Work From Office', 'Travel', 'Other'],
   visitPurposes: [
@@ -119,6 +120,10 @@ export default function HomePage() {
         const response = await api.get('/settings/public');        setAppSettings({
           adminEmails: Array.isArray(response.data.adminEmails) ? response.data.adminEmails : DEFAULT_APP_SETTINGS.adminEmails,
           commonCc: Array.isArray(response.data.commonCc) ? response.data.commonCc : DEFAULT_APP_SETTINGS.commonCc,
+          stateCcEmails:
+            response.data.stateCcEmails && typeof response.data.stateCcEmails === 'object' && !Array.isArray(response.data.stateCcEmails)
+              ? response.data.stateCcEmails
+              : DEFAULT_APP_SETTINGS.stateCcEmails,
           programManagers: Array.isArray(response.data.programManagers) ? response.data.programManagers : DEFAULT_APP_SETTINGS.programManagers,
           workModes: Array.isArray(response.data.workModes) ? response.data.workModes : DEFAULT_APP_SETTINGS.workModes,
           visitPurposes: Array.isArray(response.data.visitPurposes) ? response.data.visitPurposes : DEFAULT_APP_SETTINGS.visitPurposes,
@@ -150,6 +155,10 @@ export default function HomePage() {
       const response = await api.put('/settings', nextSettings);      const updated = {
         adminEmails: Array.isArray(response.data.adminEmails) ? response.data.adminEmails : [],
         commonCc: Array.isArray(response.data.commonCc) ? response.data.commonCc : [],
+        stateCcEmails:
+          response.data.stateCcEmails && typeof response.data.stateCcEmails === 'object' && !Array.isArray(response.data.stateCcEmails)
+            ? response.data.stateCcEmails
+            : {},
         programManagers: Array.isArray(response.data.programManagers) ? response.data.programManagers : [],
         workModes: Array.isArray(response.data.workModes) ? response.data.workModes : [],
         visitPurposes: Array.isArray(response.data.visitPurposes) ? response.data.visitPurposes : [],
@@ -444,7 +453,12 @@ export default function HomePage() {
             {activeView === 'dashboard' && <OperationsDashboard />}
 
             {activeView === 'settings' && (
-              <AdminSettings settings={appSettings} onSaveSettings={handleSaveSettings} savingSettings={savingSettings} />
+              <AdminSettings
+                settings={appSettings}
+                states={schoolMaster.states}
+                onSaveSettings={handleSaveSettings}
+                savingSettings={savingSettings}
+              />
             )}
           </>
         )}

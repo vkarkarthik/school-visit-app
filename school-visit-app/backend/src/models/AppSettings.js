@@ -13,7 +13,13 @@ const appSettingsSchema = new mongoose.Schema(
   {
     key: { type: String, required: true, unique: true, default: "global" },
     adminEmails: [{ type: String, trim: true, lowercase: true }],
-    commonCc: [{ type: String, trim: true, lowercase: true }],    programManagers: [programManagerSchema],
+    commonCc: [{ type: String, trim: true, lowercase: true }],
+    stateCcEmails: {
+      type: Map,
+      of: [{ type: String, trim: true, lowercase: true }],
+      default: {},
+    },
+    programManagers: [programManagerSchema],
     workModes: {
       type: [String],
       default: ["School Visit", "Work From Home", "Work From Office", "Travel", "Other"],

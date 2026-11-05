@@ -6,6 +6,7 @@ export const getPublicSettingsController = asyncHandler(async (req, res) => {
   res.json({
     success: true,    adminEmails: settings.adminEmails,
     commonCc: settings.commonCc,
+    stateCcEmails: settings.stateCcEmails,
     programManagers: settings.programManagers,
     workModes: settings.workModes,
     visitPurposes: settings.visitPurposes,
@@ -20,6 +21,7 @@ export const updateSettingsController = asyncHandler(async (req, res) => {
     success: true,
     message: "Settings updated.",    adminEmails: settings.adminEmails,
     commonCc: settings.commonCc,
+    stateCcEmails: settings.stateCcEmails,
     programManagers: settings.programManagers,
     workModes: settings.workModes,
     visitPurposes: settings.visitPurposes,

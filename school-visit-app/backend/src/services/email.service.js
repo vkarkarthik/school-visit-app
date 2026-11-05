@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { env } from "../config/env.js";
-import { getCommonCcString } from "./settings.service.js";
+import { getCommonCcString, getReportCcSettings } from "./settings.service.js";
 
 const serviceDir = dirname(fileURLToPath(import.meta.url));
 const logoPath = join(serviceDir, "../../assets/superteacher-logo.png");
@@ -64,19 +64,38 @@ async function sendMailWithFallback(mailOptions) {
   throw lastError;
 }
 
-function mergeEmailLists(...values) {
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function splitEmailValues(value) {
+  if (Array.isArray(value)) return value.flatMap(splitEmailValues);
+  return String(value || "").split(/[\n,]/);
+}
+
+export function mergeEmailLists(...values) {
   const seen = new Set();
 
   return values
-    .flatMap((value) => String(value || "").split(","))
-    .map((email) => email.trim())
-    .filter(Boolean)
+    .flatMap(splitEmailValues)
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => EMAIL_PATTERN.test(email))
     .filter((email) => {
       const key = email.toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
+}
+
+export function buildVisitReportEmailOptions(report, { subject, html, pdfBuffer } = {}) {
+  return {
+    to: report?.schoolEmail,
+    cc: report?.ccEmails,
+    replyTo: report?.programManagerEmail,
+    state: report?.state,
+    subject,
+    html,
+    pdfBuffer,
+  };
 }
 
 async function parseAppsScriptResponse(response) {
@@ -103,9 +122,9 @@ function getFromDetails() {
   };
 }
 
-export async function sendVisitReportEmail({ to, cc, replyTo, subject, html, pdfBuffer }) {
-  const commonCc = await getCommonCcString();
-  const ccList = mergeEmailLists(replyTo, commonCc, cc);
+export async function sendVisitReportEmail({ to, cc, replyTo, state, subject, html, pdfBuffer }) {
+  const { commonCc, stateCc } = await getReportCcSettings(state);
+  const ccList = mergeEmailLists(replyTo, commonCc, stateCc, cc);
   const logoBase64 = existsSync(logoPath) ? readFileSync(logoPath).toString("base64") : "";
 
   if (env.gmailScriptUrl) {
