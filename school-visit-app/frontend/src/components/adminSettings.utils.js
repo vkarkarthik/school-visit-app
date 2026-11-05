@@ -85,6 +85,40 @@ export function stateCcEditorToMapping(editor) {
   return normalizeStateCcEmails(mapping);
 }
 
+export function buildSavedStateCcRows(states, stateCcEmails, search = '') {
+  const savedMapping = normalizeStateCcEmails(stateCcEmails);
+  const savedByKey = new Map(
+    Object.entries(savedMapping).map(([state, emails]) => [normalizeStateKey(state), emails])
+  );
+  const stateNamesByKey = new Map();
+
+  for (const state of Array.isArray(states) ? states : []) {
+    const stateName = String(state || '').trim();
+    const stateKey = normalizeStateKey(stateName);
+    if (stateName && stateKey) stateNamesByKey.set(stateKey, stateName);
+  }
+
+  for (const state of Object.keys(savedMapping)) {
+    const stateName = String(state || '').trim();
+    const stateKey = normalizeStateKey(stateName);
+    if (stateName && stateKey && !stateNamesByKey.has(stateKey)) stateNamesByKey.set(stateKey, stateName);
+  }
+
+  const query = String(search || '').trim().toLowerCase();
+
+  return [...stateNamesByKey.entries()]
+    .map(([stateKey, state]) => ({
+      state,
+      stateKey,
+      emails: savedByKey.get(stateKey) || [],
+    }))
+    .filter(({ state, emails }) => {
+      if (!query) return true;
+      return state.toLowerCase().includes(query) || emails.some((email) => email.includes(query));
+    })
+    .sort((a, b) => a.state.localeCompare(b.state));
+}
+
 export function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 }

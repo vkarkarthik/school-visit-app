@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildSavedStateCcRows,
   buildSettingsPayload,
   createStateCcEditor,
   listToText,
@@ -165,4 +166,33 @@ test('rejects invalid global and state CC email addresses', () => {
     }),
     'Invalid email address in Karnataka CC: broken-address'
   );
+});
+
+test('builds searchable saved state CC rows from live states and persisted values', () => {
+  const rows = buildSavedStateCcRows(
+    ['Tamil Nadu', 'Karnataka', 'Telangana/AP'],
+    {
+      TN: ['tnlead@superteacher.in'],
+      Karnataka: [],
+    }
+  );
+
+  assert.deepEqual(rows, [
+    { state: 'Karnataka', stateKey: 'karnataka', emails: [] },
+    { state: 'Tamil Nadu', stateKey: 'tamilnadu', emails: ['tnlead@superteacher.in'] },
+    { state: 'Telangana/AP', stateKey: 'telanganaap', emails: [] },
+  ]);
+  assert.deepEqual(buildSavedStateCcRows(['Tamil Nadu', 'Karnataka'], { TN: ['tnlead@superteacher.in'] }, 'tnlead'), [
+    { state: 'Tamil Nadu', stateKey: 'tamilnadu', emails: ['tnlead@superteacher.in'] },
+  ]);
+});
+
+test('saved state CC rows ignore unsaved editor text until persisted settings change', () => {
+  const saved = { 'Tamil Nadu': ['saved@superteacher.in'] };
+  const editor = createStateCcEditor(saved);
+  editor.tamilnadu.text = 'unsaved@superteacher.in';
+
+  assert.deepEqual(buildSavedStateCcRows(['Tamil Nadu'], saved), [
+    { state: 'Tamil Nadu', stateKey: 'tamilnadu', emails: ['saved@superteacher.in'] },
+  ]);
 });
