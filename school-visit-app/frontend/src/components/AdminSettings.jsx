@@ -1,46 +1,46 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api/client';const emptyManager = { name: '', email: '', active: true };
+import { useEffect, useRef, useState } from 'react';
+import { api } from '../api/client';
+import {
+  buildSettingsPayload,
+  listToText,
+  normalizeList,
+  normalizeSettingsForForm,
+  settingsSignature,
+  validateSettingsPayload,
+} from './adminSettings.utils';
 
-function listToText(values) {
-  return (values || []).join('\n');
-}
+const emptyManager = { name: '', email: '', active: true };
 
-function textToList(text, { keepSchoolVisit = false } = {}) {
-  const list = String(text || '')
-    .split(/[\n,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  const seen = new Set();
-  const unique = [];
-  for (const item of list) {
-    if (seen.has(item)) continue;
-    seen.add(item);
-    unique.push(item);
-  }
-
-  if (keepSchoolVisit && !unique.includes('School Visit')) {
-    unique.unshift('School Visit');
-  }
-
-  return unique;
+function createEmailText(settings) {
+  return {
+    adminEmails: listToText(settings.adminEmails, ', '),
+    commonCc: listToText(settings.commonCc, ', '),
+  };
 }
 
 
 export default function AdminSettings({ settings, onSaveSettings, savingSettings }) {
-  const [draft, setDraft] = useState(settings);
+  const [draft, setDraft] = useState(() => normalizeSettingsForForm(settings));
+  const [emailText, setEmailText] = useState(() => createEmailText(normalizeSettingsForForm(settings)));
   const [message, setMessage] = useState('');
   const [sheetDashboardUrl, setSheetDashboardUrl] = useState('');
   const [buildingDashboard, setBuildingDashboard] = useState(false);
+  const lastSyncedSettings = useRef(settingsSignature(settings));
 
   useEffect(() => {
-    setDraft(settings);
+    const nextSignature = settingsSignature(settings);
+    if (nextSignature === lastSyncedSettings.current) return;
+
+    const normalizedSettings = normalizeSettingsForForm(settings);
+    lastSyncedSettings.current = nextSignature;
+    setDraft(normalizedSettings);
+    setEmailText(createEmailText(normalizedSettings));
   }, [settings]);
 
   const updateManager = (index, field, value) => {
     setDraft((prev) => ({
       ...prev,
-      programManagers: prev.programManagers.map((manager, currentIndex) =>
+      programManagers: (Array.isArray(prev.programManagers) ? prev.programManagers : []).map((manager, currentIndex) =>
         currentIndex === index ? { ...manager, [field]: value } : manager
       ),
     }));
@@ -56,13 +56,26 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
   const removeManager = (index) => {
     setDraft((prev) => ({
       ...prev,
-      programManagers: prev.programManagers.filter((_, currentIndex) => currentIndex !== index),
+      programManagers: (Array.isArray(prev.programManagers) ? prev.programManagers : []).filter(
+        (_, currentIndex) => currentIndex !== index
+      ),
     }));
   };
 
   const saveSettings = async () => {
     setMessage('');
-    const result = await onSaveSettings(draft);
+    const payload = buildSettingsPayload(draft, emailText);
+    const validationMessage = validateSettingsPayload(payload);
+    if (validationMessage) {
+      setMessage(validationMessage);
+      return;
+    }
+
+    const result = await onSaveSettings(payload);
+    if (result?.ok) {
+      setDraft(payload);
+      setEmailText(createEmailText(payload));
+    }
     setMessage(result?.message || 'Settings updated.');
   };
 
@@ -96,8 +109,8 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
           Admin Emails
           <textarea
             rows={3}
-            value={(draft.adminEmails || []).join(', ')}
-            onChange={(e) => setDraft((prev) => ({ ...prev, adminEmails: e.target.value }))}
+            value={emailText.adminEmails}
+            onChange={(e) => setEmailText((prev) => ({ ...prev, adminEmails: e.target.value }))}
             placeholder="admin1@superteacher.in, admin2@superteacher.co.in"
           />
         </label>
@@ -106,8 +119,8 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
           Common Mail CC
           <textarea
             rows={3}
-            value={(draft.commonCc || []).join(', ')}
-            onChange={(e) => setDraft((prev) => ({ ...prev, commonCc: e.target.value }))}
+            value={emailText.commonCc}
+            onChange={(e) => setEmailText((prev) => ({ ...prev, commonCc: e.target.value }))}
             placeholder="teamlead@superteacher.in, saleshead@superteacher.co.in"
           />
         </label>
@@ -185,7 +198,7 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
             <textarea
               rows={6}
               value={listToText(draft.workModes)}
-              onChange={(e) => setDraft((prev) => ({ ...prev, workModes: textToList(e.target.value, { keepSchoolVisit: true }) }))}
+              onChange={(e) => setDraft((prev) => ({ ...prev, workModes: normalizeList(e.target.value, { keepSchoolVisit: true }) }))}
               placeholder="School Visit\nWork From Home\nWork From Office\nTravel\nOther"
             />
           </label>
@@ -195,7 +208,7 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
             <textarea
               rows={8}
               value={listToText(draft.visitPurposes)}
-              onChange={(e) => setDraft((prev) => ({ ...prev, visitPurposes: textToList(e.target.value) }))}
+              onChange={(e) => setDraft((prev) => ({ ...prev, visitPurposes: normalizeList(e.target.value) }))}
               placeholder="New School Visit / Demo\nTeachers Training\nOther Works"
             />
           </label>
@@ -205,7 +218,7 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
             <textarea
               rows={4}
               value={listToText(draft.priorities)}
-              onChange={(e) => setDraft((prev) => ({ ...prev, priorities: textToList(e.target.value) }))}
+              onChange={(e) => setDraft((prev) => ({ ...prev, priorities: normalizeList(e.target.value) }))}
               placeholder="Critical\nHigh\nNormal"
             />
           </label>
