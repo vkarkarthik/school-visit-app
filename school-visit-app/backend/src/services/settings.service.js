@@ -64,6 +64,17 @@ function normalizeEmailList(values) {
   return list;
 }
 
+export function requireAdminEmails(values) {
+  const adminEmails = normalizeEmailList(values);
+  if (!adminEmails.length) {
+    const error = new Error("At least one Admin Email is required to prevent losing admin access.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return adminEmails;
+}
+
 function normalizeProgramManagers(values) {
   const seen = new Set();
   const list = [];
@@ -92,16 +103,18 @@ function normalizeProgramManagers(values) {
   };
 }
 
-function normalizeSettingsDocument(doc) {
+export function normalizeSettingsDocument(doc) {
   const defaults = buildDefaultSettings();
   const source = doc?.toObject ? doc.toObject() : doc || {};
+  const hasOwn = (key) => Object.prototype.hasOwnProperty.call(source, key);
 
   return {
-    adminEmails: normalizeEmailList(source.adminEmails?.length ? source.adminEmails : defaults.adminEmails),
-    commonCc: normalizeEmailList(source.commonCc?.length ? source.commonCc : defaults.commonCc),    programManagers: normalizeProgramManagers(source.programManagers || defaults.programManagers),
-    workModes: normalizeStringList(source.workModes?.length ? source.workModes : defaults.workModes),
-    visitPurposes: normalizeStringList(source.visitPurposes?.length ? source.visitPurposes : defaults.visitPurposes),
-    priorities: normalizeStringList(source.priorities?.length ? source.priorities : defaults.priorities),
+    adminEmails: normalizeEmailList(hasOwn("adminEmails") ? source.adminEmails : defaults.adminEmails),
+    commonCc: normalizeEmailList(hasOwn("commonCc") ? source.commonCc : defaults.commonCc),
+    programManagers: normalizeProgramManagers(hasOwn("programManagers") ? source.programManagers : defaults.programManagers),
+    workModes: normalizeStringList(hasOwn("workModes") ? source.workModes : defaults.workModes),
+    visitPurposes: normalizeStringList(hasOwn("visitPurposes") ? source.visitPurposes : defaults.visitPurposes),
+    priorities: normalizeStringList(hasOwn("priorities") ? source.priorities : defaults.priorities),
     updatedBy: normalizeEmail(source.updatedBy),
     updatedAt: source.updatedAt || null,
   };
@@ -135,7 +148,7 @@ export async function getAppSettings({ forceRefresh = false } = {}) {
 export async function saveAppSettings(payload, updatedBy = "") {
   const next = {
     key: SETTINGS_KEY,
-    adminEmails: normalizeEmailList(payload?.adminEmails),
+    adminEmails: requireAdminEmails(payload?.adminEmails),
     commonCc: normalizeEmailList(payload?.commonCc),    programManagers: normalizeProgramManagers(payload?.programManagers),
     workModes: normalizeStringList(payload?.workModes),
     visitPurposes: normalizeStringList(payload?.visitPurposes),
@@ -146,7 +159,7 @@ export async function saveAppSettings(payload, updatedBy = "") {
   const doc = await AppSettings.findOneAndUpdate(
     { key: SETTINGS_KEY },
     next,
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
   );
 
   const normalized = normalizeSettingsDocument(doc);
