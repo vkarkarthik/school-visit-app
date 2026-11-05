@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
 import {
+  buildSavedStateCcRows,
   buildSettingsPayload,
   createStateCcEditor,
   listToText,
@@ -27,10 +28,12 @@ export default function AdminSettings({ settings, states = [], onSaveSettings, s
   const [emailText, setEmailText] = useState(() => createEmailText(initialSettings));
   const [stateCcEditor, setStateCcEditor] = useState(() => createStateCcEditor(initialSettings.stateCcEmails));
   const [selectedCcState, setSelectedCcState] = useState('');
+  const [savedCcSearch, setSavedCcSearch] = useState('');
   const [message, setMessage] = useState('');
   const [sheetDashboardUrl, setSheetDashboardUrl] = useState('');
   const [buildingDashboard, setBuildingDashboard] = useState(false);
   const lastSyncedSettings = useRef(settingsSignature(settings));
+  const stateCcInputRef = useRef(null);
 
   useEffect(() => {
     const nextSignature = settingsSignature(settings);
@@ -68,6 +71,10 @@ export default function AdminSettings({ settings, states = [], onSaveSettings, s
 
   const selectedStateKey = normalizeStateKey(selectedCcState);
   const selectedStateCcText = stateCcEditor[selectedStateKey]?.text || '';
+  const savedStateCcRows = useMemo(
+    () => buildSavedStateCcRows(states, draft.stateCcEmails, savedCcSearch),
+    [states, draft.stateCcEmails, savedCcSearch]
+  );
 
   const updateSelectedStateCc = (text) => {
     if (!selectedCcState || !selectedStateKey) return;
@@ -78,6 +85,14 @@ export default function AdminSettings({ settings, states = [], onSaveSettings, s
         text,
       },
     }));
+  };
+
+  const editSavedStateCc = (state) => {
+    setSelectedCcState(state);
+    window.requestAnimationFrame(() => {
+      stateCcInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      stateCcInputRef.current?.focus({ preventScroll: true });
+    });
   };
 
   const updateManager = (index, field, value) => {
@@ -197,6 +212,7 @@ export default function AdminSettings({ settings, states = [], onSaveSettings, s
           <label>
             CC Email Addresses
             <textarea
+              ref={stateCcInputRef}
               rows={3}
               value={selectedStateCcText}
               onChange={(event) => updateSelectedStateCc(event.target.value)}
@@ -215,6 +231,66 @@ export default function AdminSettings({ settings, states = [], onSaveSettings, s
           >
             Clear Selected State CC
           </button>
+        </div>
+
+        <div className="saved-state-cc-section">
+          <div className="panel-header compact-panel-header">
+            <div>
+              <span className="eyebrow">Saved state-wise CC emails</span>
+              <h3>Database configuration by state</h3>
+            </div>
+            <span className="panel-badge">Saved values</span>
+          </div>
+          <p className="help-text">
+            This table shows only the last successfully saved settings. Unsaved textarea edits appear above and are not shown here until Save Settings succeeds.
+          </p>
+
+          <label className="saved-state-cc-search">
+            Search saved state CC settings
+            <input
+              type="search"
+              value={savedCcSearch}
+              onChange={(event) => setSavedCcSearch(event.target.value)}
+              placeholder="Search by state or email address"
+            />
+          </label>
+
+          <div className="saved-state-cc-table-wrap">
+            <table className="saved-state-cc-table">
+              <thead>
+                <tr>
+                  <th>State / Region</th>
+                  <th>Saved CC Email Addresses</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {savedStateCcRows.map(({ state, stateKey, emails }) => (
+                  <tr key={stateKey}>
+                    <td data-label="State / Region"><strong>{state}</strong></td>
+                    <td data-label="Saved CC Email Addresses">
+                      {emails.length ? (
+                        <div className="saved-state-cc-email-list">
+                          {emails.map((email) => <span key={email}>{email}</span>)}
+                        </div>
+                      ) : (
+                        <span className="muted-text">Not configured</span>
+                      )}
+                    </td>
+                    <td data-label="Action">
+                      <button type="button" className="table-action" onClick={() => editSavedStateCc(state)}>
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {!savedStateCcRows.length && (
+            <div className="empty-state">No states or saved email addresses match your search.</div>
+          )}
         </div>
       </div>
 
