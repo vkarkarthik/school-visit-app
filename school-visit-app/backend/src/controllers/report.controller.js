@@ -8,7 +8,7 @@ import cloudinary from "../config/cloudinary.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
 import { generatePdfBuffer } from "../services/pdf.service.js";
-import { sendFollowUpReminderEmail, sendVisitReportEmail } from "../services/email.service.js";
+import { buildVisitReportEmailOptions, sendFollowUpReminderEmail, sendVisitReportEmail } from "../services/email.service.js";
 import { appendNewSchoolToSheet, appendPlanLogToSheet, getSchoolMaster, isPlannerSheetQuotaError, schedulePlannerDashboardRefresh } from "../services/sheets.service.js";
 import { getAdminEmailSet, getAppSettings } from "../services/settings.service.js";
 import { VisitReport } from "../models/VisitReport.js";
@@ -300,14 +300,11 @@ export const createReportController = asyncHandler(async (req, res) => {
         console.log("STEP 6 SKIPPED: Internal work log, email not required");
       } else {
       console.log("STEP 6: Sending email");
-      await sendVisitReportEmail({
-        to: normalizedSchoolEmail,
-        cc: ccEmails,
-        replyTo: programManagerEmail,
+      await sendVisitReportEmail(buildVisitReportEmailOptions(payload, {
         subject: emailSubject,
         html: emailHtml,
         pdfBuffer,
-      });
+      }));
       console.log("STEP 6 DONE: Email sent");
       }
     } catch (emailError) {
@@ -1571,14 +1568,11 @@ export const resendReportEmailController = asyncHandler(async (req, res) => {
   const pdfUrl = report.pdfUrl || (await savePdfArchive(pdfBuffer, report.schoolName, report.visitDate));
 
   try {
-    await sendVisitReportEmail({
-      to: report.schoolEmail,
-      cc: report.ccEmails,
-      replyTo: report.programManagerEmail,
+    await sendVisitReportEmail(buildVisitReportEmailOptions(payload, {
       subject: emailSubject,
       html: emailHtml,
       pdfBuffer,
-    });
+    }));
 
     report.emailStatus = "Sent";
     report.emailSubject = emailSubject;

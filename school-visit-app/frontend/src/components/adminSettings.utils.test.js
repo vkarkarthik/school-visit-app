@@ -2,10 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildSettingsPayload,
+  createStateCcEditor,
   listToText,
   normalizeEmailList,
   normalizeList,
   normalizeSettingsForForm,
+  normalizeStateCcEmails,
+  normalizeStateKey,
+  stateCcEditorToMapping,
   settingsSignature,
   validateSettingsPayload,
 } from './adminSettings.utils.js';
@@ -86,4 +90,79 @@ test('rejects an empty admin email list before saving', () => {
     'At least one Admin Email is required to prevent losing admin access.'
   );
   assert.equal(validateSettingsPayload({ adminEmails: ['admin@example.com'] }), '');
+});
+
+test('normalizes state CC mappings without merging distinct states', () => {
+  assert.equal(normalizeStateKey(' TN '), 'tamilnadu');
+  assert.equal(normalizeStateKey('Tamil-Nadu'), 'tamilnadu');
+  assert.equal(normalizeStateKey('KA'), 'karnataka');
+  assert.notEqual(normalizeStateKey('Telangana/AP'), normalizeStateKey('Telangana'));
+  assert.notEqual(normalizeStateKey('Telangana/AP'), normalizeStateKey('Andhra Pradesh'));
+
+  assert.deepEqual(
+    normalizeStateCcEmails({
+      'Tamil Nadu': ['TNLEAD@EXAMPLE.COM'],
+      Karnataka: [],
+      'Telangana/AP': ['combined@example.com'],
+    }),
+    {
+      'Tamil Nadu': ['tnlead@example.com'],
+      Karnataka: [],
+      'Telangana/AP': ['combined@example.com'],
+    }
+  );
+});
+
+test('preserves independent unsaved state CC edits and empty lists', () => {
+  const editor = createStateCcEditor({
+    'Tamil Nadu': ['tn@example.com'],
+    Karnataka: ['ka@example.com'],
+  });
+  editor.tamilnadu.text = 'new-tn@example.com, SECOND@example.com';
+  editor.karnataka.text = '';
+
+  assert.deepEqual(stateCcEditorToMapping(editor), {
+    'Tamil Nadu': ['new-tn@example.com', 'second@example.com'],
+    Karnataka: [],
+  });
+});
+
+test('includes state CC arrays in the settings payload and reload normalization', () => {
+  const payload = buildSettingsPayload(
+    {
+      adminEmails: ['admin@example.com'],
+      commonCc: [],
+      stateCcEmails: {},
+    },
+    { adminEmails: 'admin@example.com', commonCc: 'global@example.com' },
+    {
+      tamilnadu: { state: 'Tamil Nadu', text: 'tn@example.com' },
+      karnataka: { state: 'Karnataka', text: '' },
+    }
+  );
+
+  assert.deepEqual(payload.stateCcEmails, {
+    'Tamil Nadu': ['tn@example.com'],
+    Karnataka: [],
+  });
+  assert.deepEqual(normalizeSettingsForForm(payload).stateCcEmails, payload.stateCcEmails);
+});
+
+test('rejects invalid global and state CC email addresses', () => {
+  assert.equal(
+    validateSettingsPayload({
+      adminEmails: ['admin@example.com'],
+      commonCc: ['not-an-email'],
+      stateCcEmails: {},
+    }),
+    'Invalid email address in Common Mail CC: not-an-email'
+  );
+  assert.equal(
+    validateSettingsPayload({
+      adminEmails: ['admin@example.com'],
+      commonCc: [],
+      stateCcEmails: { Karnataka: ['broken-address'] },
+    }),
+    'Invalid email address in Karnataka CC: broken-address'
+  );
 });

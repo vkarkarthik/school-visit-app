@@ -15,6 +15,13 @@ const DEFAULT_VISIT_PURPOSES = [
   "Other Works",
 ];
 const DEFAULT_PRIORITIES = ["Critical", "High", "Normal"];
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const STATE_ABBREVIATIONS = {
+  tn: "tamilnadu",
+  ka: "karnataka",
+  kl: "kerala",
+  wb: "westbengal",
+};
 const DEFAULT_ADMIN_EMAILS = [
   "karthik@superteacher.in",
   "karthikv@superteacher.in",
@@ -50,11 +57,11 @@ function normalizeStringList(values) {
   return list;
 }
 
-function normalizeEmailList(values) {
+export function normalizeEmailList(values) {
   const seen = new Set();
   const list = [];
 
-  for (const rawItem of Array.isArray(values) ? values : String(values || "").split(",")) {
+  for (const rawItem of Array.isArray(values) ? values : String(values || "").split(/[\n,]/)) {
     const email = normalizeEmail(rawItem);
     if (!email || seen.has(email)) continue;
     seen.add(email);
@@ -64,8 +71,71 @@ function normalizeEmailList(values) {
   return list;
 }
 
+export function normalizeStateKey(value) {
+  const compact = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+  return STATE_ABBREVIATIONS[compact] || compact;
+}
+
+export function normalizeStateCcEmails(values) {
+  const entries = values instanceof Map
+    ? [...values.entries()]
+    : values && typeof values === "object" && !Array.isArray(values)
+      ? Object.entries(values)
+      : [];
+  const byStateKey = new Map();
+
+  for (const [rawState, rawEmails] of entries) {
+    const state = String(rawState || "").trim();
+    const stateKey = normalizeStateKey(state);
+    if (!state || !stateKey) continue;
+
+    byStateKey.set(stateKey, {
+      state,
+      emails: normalizeEmailList(rawEmails),
+    });
+  }
+
+  return Object.fromEntries([...byStateKey.values()].map(({ state, emails }) => [state, emails]));
+}
+
+function requireValidEmailList(values, label) {
+  const emails = normalizeEmailList(values);
+  const invalidEmail = emails.find((email) => !EMAIL_PATTERN.test(email));
+  if (invalidEmail) {
+    const error = new Error(`Invalid email address in ${label}: ${invalidEmail}`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return emails;
+}
+
+export function requireValidStateCcEmails(values) {
+  const normalized = normalizeStateCcEmails(values);
+
+  return Object.fromEntries(
+    Object.entries(normalized).map(([state, emails]) => [
+      state,
+      requireValidEmailList(emails, `${state} CC`),
+    ])
+  );
+}
+
+export function resolveStateCcEmails(values, state) {
+  const targetKey = normalizeStateKey(state);
+  if (!targetKey) return [];
+
+  const matchingEntry = Object.entries(normalizeStateCcEmails(values)).find(
+    ([configuredState]) => normalizeStateKey(configuredState) === targetKey
+  );
+  return matchingEntry ? matchingEntry[1] : [];
+}
+
 export function requireAdminEmails(values) {
-  const adminEmails = normalizeEmailList(values);
+  const adminEmails = requireValidEmailList(values, "Admin Emails");
   if (!adminEmails.length) {
     const error = new Error("At least one Admin Email is required to prevent losing admin access.");
     error.statusCode = 400;
@@ -94,6 +164,7 @@ function normalizeProgramManagers(values) {
   return {
     adminEmails: normalizeEmailList(DEFAULT_ADMIN_EMAILS),
     commonCc: normalizeEmailList(env.smtp.cc),
+    stateCcEmails: {},
     programManagers: [],
     workModes: normalizeStringList(DEFAULT_WORK_MODES),
     visitPurposes: normalizeStringList(DEFAULT_VISIT_PURPOSES),
@@ -105,12 +176,13 @@ function normalizeProgramManagers(values) {
 
 export function normalizeSettingsDocument(doc) {
   const defaults = buildDefaultSettings();
-  const source = doc?.toObject ? doc.toObject() : doc || {};
+  const source = doc?.toObject ? doc.toObject({ flattenMaps: true }) : doc || {};
   const hasOwn = (key) => Object.prototype.hasOwnProperty.call(source, key);
 
   return {
     adminEmails: normalizeEmailList(hasOwn("adminEmails") ? source.adminEmails : defaults.adminEmails),
     commonCc: normalizeEmailList(hasOwn("commonCc") ? source.commonCc : defaults.commonCc),
+    stateCcEmails: normalizeStateCcEmails(hasOwn("stateCcEmails") ? source.stateCcEmails : defaults.stateCcEmails),
     programManagers: normalizeProgramManagers(hasOwn("programManagers") ? source.programManagers : defaults.programManagers),
     workModes: normalizeStringList(hasOwn("workModes") ? source.workModes : defaults.workModes),
     visitPurposes: normalizeStringList(hasOwn("visitPurposes") ? source.visitPurposes : defaults.visitPurposes),
@@ -146,10 +218,16 @@ export async function getAppSettings({ forceRefresh = false } = {}) {
 }
 
 export async function saveAppSettings(payload, updatedBy = "") {
+  const hasStateCcEmails = Object.prototype.hasOwnProperty.call(payload || {}, "stateCcEmails");
+  const currentSettings = hasStateCcEmails ? null : await getAppSettings();
   const next = {
     key: SETTINGS_KEY,
     adminEmails: requireAdminEmails(payload?.adminEmails),
-    commonCc: normalizeEmailList(payload?.commonCc),    programManagers: normalizeProgramManagers(payload?.programManagers),
+    commonCc: requireValidEmailList(payload?.commonCc, "Common Mail CC"),
+    stateCcEmails: hasStateCcEmails
+      ? requireValidStateCcEmails(payload.stateCcEmails)
+      : currentSettings.stateCcEmails,
+    programManagers: normalizeProgramManagers(payload?.programManagers),
     workModes: normalizeStringList(payload?.workModes),
     visitPurposes: normalizeStringList(payload?.visitPurposes),
     priorities: normalizeStringList(payload?.priorities),
@@ -185,4 +263,12 @@ export async function isAdminEmail(email) {
 export async function getCommonCcString() {
   const settings = await getAppSettings();
   return settings.commonCc.join(",");
+}
+
+export async function getReportCcSettings(state) {
+  const settings = await getAppSettings();
+  return {
+    commonCc: settings.commonCc,
+    stateCc: resolveStateCcEmails(settings.stateCcEmails, state),
+  };
 }

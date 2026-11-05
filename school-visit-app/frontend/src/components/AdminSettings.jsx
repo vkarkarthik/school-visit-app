@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
 import {
   buildSettingsPayload,
+  createStateCcEditor,
   listToText,
   normalizeList,
   normalizeSettingsForForm,
+  normalizeStateKey,
   settingsSignature,
   validateSettingsPayload,
 } from './adminSettings.utils';
@@ -19,9 +21,12 @@ function createEmailText(settings) {
 }
 
 
-export default function AdminSettings({ settings, onSaveSettings, savingSettings }) {
-  const [draft, setDraft] = useState(() => normalizeSettingsForForm(settings));
-  const [emailText, setEmailText] = useState(() => createEmailText(normalizeSettingsForForm(settings)));
+export default function AdminSettings({ settings, states = [], onSaveSettings, savingSettings }) {
+  const initialSettings = normalizeSettingsForForm(settings);
+  const [draft, setDraft] = useState(() => initialSettings);
+  const [emailText, setEmailText] = useState(() => createEmailText(initialSettings));
+  const [stateCcEditor, setStateCcEditor] = useState(() => createStateCcEditor(initialSettings.stateCcEmails));
+  const [selectedCcState, setSelectedCcState] = useState('');
   const [message, setMessage] = useState('');
   const [sheetDashboardUrl, setSheetDashboardUrl] = useState('');
   const [buildingDashboard, setBuildingDashboard] = useState(false);
@@ -35,7 +40,45 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
     lastSyncedSettings.current = nextSignature;
     setDraft(normalizedSettings);
     setEmailText(createEmailText(normalizedSettings));
+    setStateCcEditor(createStateCcEditor(normalizedSettings.stateCcEmails));
   }, [settings]);
+
+  const stateOptions = useMemo(() => {
+    const optionsByKey = new Map();
+
+    for (const state of Array.isArray(states) ? states : []) {
+      const stateName = String(state || '').trim();
+      const stateKey = normalizeStateKey(stateName);
+      if (stateName && stateKey) optionsByKey.set(stateKey, stateName);
+    }
+
+    for (const state of Object.keys(draft.stateCcEmails || {})) {
+      const stateName = String(state || '').trim();
+      const stateKey = normalizeStateKey(stateName);
+      if (stateName && stateKey && !optionsByKey.has(stateKey)) optionsByKey.set(stateKey, stateName);
+    }
+
+    return [...optionsByKey.values()].sort((a, b) => a.localeCompare(b));
+  }, [states, draft.stateCcEmails]);
+
+  useEffect(() => {
+    if (selectedCcState && stateOptions.includes(selectedCcState)) return;
+    setSelectedCcState(stateOptions[0] || '');
+  }, [selectedCcState, stateOptions]);
+
+  const selectedStateKey = normalizeStateKey(selectedCcState);
+  const selectedStateCcText = stateCcEditor[selectedStateKey]?.text || '';
+
+  const updateSelectedStateCc = (text) => {
+    if (!selectedCcState || !selectedStateKey) return;
+    setStateCcEditor((prev) => ({
+      ...prev,
+      [selectedStateKey]: {
+        state: selectedCcState,
+        text,
+      },
+    }));
+  };
 
   const updateManager = (index, field, value) => {
     setDraft((prev) => ({
@@ -64,7 +107,7 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
 
   const saveSettings = async () => {
     setMessage('');
-    const payload = buildSettingsPayload(draft, emailText);
+    const payload = buildSettingsPayload(draft, emailText, stateCcEditor);
     const validationMessage = validateSettingsPayload(payload);
     if (validationMessage) {
       setMessage(validationMessage);
@@ -75,6 +118,7 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
     if (result?.ok) {
       setDraft(payload);
       setEmailText(createEmailText(payload));
+      setStateCcEditor(createStateCcEditor(payload.stateCcEmails));
     }
     setMessage(result?.message || 'Settings updated.');
   };
@@ -124,6 +168,54 @@ export default function AdminSettings({ settings, onSaveSettings, savingSettings
             placeholder="teamlead@superteacher.in, saleshead@superteacher.co.in"
           />
         </label>
+      </div>
+
+      <div className="panel-subsection">
+        <div className="panel-header compact-panel-header">
+          <div>
+            <span className="eyebrow">State-wise email CC settings</span>
+            <h3>Route report copies to the selected state team</h3>
+          </div>
+        </div>
+        <p className="help-text">
+          These recipients are added only to school visit reports for the selected state. Common Mail CC continues to apply to every report.
+        </p>
+
+        <div className="form-grid">
+          <label>
+            State / Region
+            <select value={selectedCcState} onChange={(event) => setSelectedCcState(event.target.value)}>
+              {!stateOptions.length && <option value="">No states available</option>}
+              {stateOptions.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            CC Email Addresses
+            <textarea
+              rows={3}
+              value={selectedStateCcText}
+              onChange={(event) => updateSelectedStateCc(event.target.value)}
+              placeholder="statelead@superteacher.in, coordinator@superteacher.co.in"
+              disabled={!selectedCcState}
+            />
+          </label>
+        </div>
+
+        <div className="modal-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => updateSelectedStateCc('')}
+            disabled={!selectedCcState || !selectedStateCcText}
+          >
+            Clear Selected State CC
+          </button>
+        </div>
       </div>
 
       <div className="panel-subsection">

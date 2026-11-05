@@ -6,7 +6,7 @@
     "dev": "nodemon src/server.js",
     "postinstall": "PUPPETEER_CACHE_DIR=.cache/puppeteer npx puppeteer browsers install chrome",
     "start": "node src/server.js",
-    "test": "node --test src/services/settings.service.test.js"
+    "test": "node --test src/services/settings.service.test.js src/services/email.service.test.js src/routes/settings.routes.test.js"
   },
   "dependencies": {
     "cloudinary": "^2.7.0",
